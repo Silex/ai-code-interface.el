@@ -116,20 +116,27 @@ Returns a list of relative paths from the git repository root."
   "Generate prompt to investigate exceptions or errors in code.
 With a prefix argument (C-u), or if not in a programming mode buffer,
 prompt for investigation without adding any context.
+If a *compilation* buffer is visible in the current window, use its full content as context.
 If a region is selected, investigate that specific error or exception.
 If cursor is in a function, investigate exceptions in that function.
 Otherwise, investigate general exception handling in the file.
 Inserts the prompt into the AI prompt file and optionally sends to AI.
 Argument ARG is the prefix argument."
   (interactive "P")
-  (let* ((region-text (when (region-active-p)
+  (let* ((compilation-buffer (get-buffer "*compilation*"))
+         (compilation-content (when (and compilation-buffer
+                                        (get-buffer-window compilation-buffer))
+                               (with-current-buffer compilation-buffer
+                                 (buffer-substring-no-properties (point-min) (point-max)))))
+         (region-text (when (region-active-p)
                         (buffer-substring-no-properties (region-beginning) (region-end))))
+         (context-text (or compilation-content region-text))
          (function-name (which-function))
          (files-context-string (ai-code--get-context-files-string)))
     (if (or arg (not (derived-mode-p 'prog-mode)))
-        (let* ((initial-prompt (if (and region-text (not (derived-mode-p 'prog-mode)))
-                                   (concat "Investigate the exception and fix the code:\n\n" region-text)
-                                 (or region-text "")))
+        (let* ((initial-prompt (if (and context-text (not (derived-mode-p 'prog-mode)))
+                                   (concat "Investigate the exception and fix the code:\n\n" context-text)
+                                 (or context-text "")))
                (prompt (ai-code-read-string "Investigate exception (no context): " initial-prompt))
                (final-prompt (concat prompt
                                      (when function-name (format "\nFunction: %s" function-name))
@@ -137,6 +144,8 @@ Argument ARG is the prefix argument."
           (ai-code--insert-prompt final-prompt))
       (let* ((prompt-label
               (cond
+               (compilation-content
+                "Investigate compilation error: ")
                (region-text
                 (if function-name
                     (format "Investigate exception in function %s: " function-name)
@@ -145,10 +154,12 @@ Argument ARG is the prefix argument."
                 (format "Investigate exceptions in function %s: " function-name))
                (t "Investigate exceptions in code: ")))
              (initial-prompt (ai-code-read-string prompt-label
-                                                  (or region-text "How to fix the error in this code? Please analyze the error, explain the root cause, and provide the corrected code to resolve the issue: ")))
+                                                  (or context-text "How to fix the error in this code? Please analyze the error, explain the root cause, and provide the corrected code to resolve the issue: ")))
              (final-prompt
               (concat initial-prompt
-                      (when region-text (concat "\n\nSelected code:\n" region-text))
+                      (when compilation-content (concat "\n\nCompilation output:\n" compilation-content))
+                      (when (and region-text (not compilation-content))
+                        (concat "\n\nSelected code:\n" region-text))
                       (when function-name (format "\nFunction: %s" function-name))
                       files-context-string
                       (concat "\n\nNote: Please focus on how to fix the error. Your response should include:\n"
