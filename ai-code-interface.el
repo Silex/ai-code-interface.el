@@ -143,7 +143,8 @@ Shows the current backend label to the right."
     ("a" "Start AI CLI" ai-code-cli-start)
     ("R" "Resume AI CLI" ai-code-cli-resume)
     ("z" "Switch to AI CLI" ai-code-cli-switch-to-buffer-or-hide)
-    ("s" ai-code--select-backend-description ai-code-select-backend)
+    ;; Use plist style to provide a dynamic description function.
+    ("s" ai-code-select-backend :description ai-code--select-backend-description)
     ("u" "Upgrade AI CLI" ai-code-upgrade-backend)
     ("g" "Open backend config (eg. add mcp)" ai-code-open-backend-config)
     ("|" "Apply prompt on file" ai-code-apply-prompt-on-current-file)
