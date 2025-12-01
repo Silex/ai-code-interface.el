@@ -60,7 +60,7 @@ When called from Lisp code, sends CMD directly without prompting."
      :upgrade nil
      :cli     "claude")
     (gemini
-     :label "gemini-cli.el"
+     :label "Gemini CLI"
      :require gemini-cli
      :start   gemini-cli
      :switch  gemini-cli-switch-to-buffer
@@ -70,7 +70,7 @@ When called from Lisp code, sends CMD directly without prompting."
      :upgrade "npm install -g @google/gemini-cli"
      :cli     "gemini")
     (github-copilot-cli
-     :label "ai-code-github-copilot-cli.el"
+     :label "Github Copilot CLI"
      :require ai-code-github-copilot-cli
      :start   github-copilot-cli
      :switch  github-copilot-cli-switch-to-buffer
@@ -80,7 +80,7 @@ When called from Lisp code, sends CMD directly without prompting."
      :upgrade "npm install -g @github/copilot"
      :cli     "copilot")
     (codex
-     :label "ai-code-codex-cli.el"
+     :label "OpenAI Codex"
      :require ai-code-codex-cli
      :start   codex-cli
      :switch  codex-cli-switch-to-buffer
@@ -90,7 +90,7 @@ When called from Lisp code, sends CMD directly without prompting."
      :upgrade "npm install -g @openai/codex@latest"
      :cli     "codex")
     (opencode
-     :label "ai-code-opencode.el"
+     :label "Opencode"
      :require ai-code-opencode
      :start   opencode
      :switch  opencode-switch-to-buffer
