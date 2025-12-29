@@ -14,14 +14,16 @@
 (require 'ai-code-input)
 (require 'ai-code-prompt-mode)
 
+(declare-function helm-gtags-create-tags "helm-gtags" (dir &optional label))
+
 (defcustom ai-code-init-project-gtags-label "pygments"
   "Default label passed to Helm-Gtags when initializing a project.
 Candidate values:
-- 'default'
-- 'native'
-- 'ctags'
-- 'new-ctags'
-- 'pygments'"
+- \\='default
+- \\='native
+- \\='ctags
+- \\='new-ctags
+- \\='pygments"
   :type 'string
   :group 'ai-code)
 
@@ -119,11 +121,11 @@ Returns a cons cell (RESOLVED-BASE . RESOLVED-FEATURE)."
          ('remote
           ;; For remote scope, explicitly try to use origin/ prefixed branches
           ;; Add origin/ prefix if not already present
-          (setq resolved-base-branch 
+          (setq resolved-base-branch
                 (if (string-prefix-p "origin/" input-base-branch)
                     input-base-branch
                   (concat "origin/" input-base-branch)))
-          (setq resolved-feature-branch 
+          (setq resolved-feature-branch
                 (if (string-prefix-p "origin/" input-feature-branch)
                     input-feature-branch
                   (concat "origin/" input-feature-branch))))
@@ -181,10 +183,13 @@ GIT-ROOT is the root directory of the Git repository."
     (ai-code--generate-staged-diff diff-file)
     diff-file))
 
-(defun ai-code--handle-base-vs-head-diff-generation (git-root &optional open-in-browser)
+(defun ai-code--handle-base-vs-head-diff-generation (git-root
+                                                      &optional
+                                                      open-in-browser)
   "Handle generation of diff between a base branch and HEAD.
 GIT-ROOT is the root directory of the Git repository.
-If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web interface without generating file."
+If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web
+interface without generating file."
   (let* ((base-branch (ai-code-read-string "Base branch name: "))
          (current-branch (magit-get-current-branch)))
     (if open-in-browser
@@ -200,10 +205,13 @@ If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web interface withou
         (ai-code--generate-branch-or-commit-diff diff-params diff-file)
         diff-file))))
 
-(defun ai-code--handle-branch-range-diff-generation (git-root &optional open-in-browser)
-  "Handle generation of diff between a base branch and a feature branch.
+(defun ai-code--handle-branch-range-diff-generation (git-root
+                                                      &optional
+                                                      open-in-browser)
+  "Handle generation of diff between a base and a feature branch.
 GIT-ROOT is the root directory of the Git repository.
-If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web interface without generating file."
+If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web
+interface without generating file."
   (let* ((base-branch (ai-code-read-string "Base branch name: "))
          (feature-branch (ai-code-read-string "Feature branch name: ")))
     (if open-in-browser
@@ -232,10 +240,12 @@ If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web interface withou
           (ai-code--generate-branch-or-commit-diff diff-params diff-file)
           diff-file)))))
 
-(defun ai-code--handle-commit-diff-generation (git-root &optional open-in-browser)
+(defun ai-code--handle-commit-diff-generation (git-root
+                                                &optional open-in-browser)
   "Handle generation of diff for a single commit.
 GIT-ROOT is the root directory of the Git repository.
-If OPEN-IN-BROWSER is non-nil, only open the commit in GitHub web interface without generating file."
+If OPEN-IN-BROWSER is non-nil, only open the commit in GitHub web
+interface without generating file."
   (let* ((commit-hash (ai-code-read-string "Commit hash: ")))
     (if open-in-browser
         (progn
@@ -271,7 +281,9 @@ If OPEN-IN-BROWSER is non-nil, only open the commit in GitHub web interface with
 ;;; New helper for commit ranges
 (defun ai-code--handle-commit-range-diff-generation (git-root &optional open-in-browser)
   "Handle generation of diff between two commits (commit range).
-If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web interface without generating file."
+GIT-ROOT is the repository root directory.
+If OPEN-IN-BROWSER is non-nil, only open the diff in GitHub web interface
+without generating file."
   (let* ((raw-start (ai-code-read-string "Start commit or branch: "))
          (raw-end   (ai-code-read-string "End commit or branch: "))
          ;; try to resolve remote branches or commits
@@ -353,8 +365,8 @@ For non-staged diffs, user is prompted whether to open in browser."
 ;;;###autoload
 (defun ai-code-magit-blame-analyze ()
   "Analyze current file or region Git history with AI for deeper insights.
-If region is active, analyze just that region. Otherwise analyze entire file.
-Combines magit-blame history tracking with AI analysis to help understand
+If region is active, analyze just that region.  Otherwise analyze entire file.
+Combines `magit-blame' history tracking with AI analysis to help understand
 code evolution and the reasoning behind changes."
   (interactive)
   (when (ai-code--validate-buffer-file)
@@ -367,16 +379,16 @@ code evolution and the reasoning behind changes."
                        (line-number-at-pos (region-end))
                      (line-number-at-pos (point-max))))
          (region-text (if has-region
-                          (buffer-substring-no-properties 
+                          (buffer-substring-no-properties
                            (region-beginning) (region-end))
                         nil))
-         (blame-args (list "blame" "-l" 
+         (blame-args (list "blame" "-l"
                            (format "-L%d,%d" line-start line-end)
                            file-path))
          (blame-output (with-temp-buffer
                          (apply #'process-file "git" nil t nil blame-args)
                          (buffer-string)))
-         (context (format "File: %s\nLines: %d-%d\n\n" 
+         (context (format "File: %s\nLines: %d-%d\n\n"
                           file-path line-start line-end))
          (files-context-string (ai-code--get-context-files-string))
          (code-sample (if has-region
@@ -388,9 +400,9 @@ code evolution and the reasoning behind changes."
                          context files-context-string code-sample blame-output analysis-instructions)))
     (ai-code--insert-prompt prompt))))
 
-;;;###autoload
 (defun ai-code--ensure-git-log (git-root repo-name keyword)
-  "Fetch commits from the last X months as git.log under GIT-ROOT for REPO-NAME, filtered by KEYWORD.
+  "Fetch commits from the last X months under GIT-ROOT for REPO-NAME.
+KEYWORD is used to filter commits.
 Returns the path to the git.log file."
   (let* ((project-log-file-path (expand-file-name "git.log" git-root))
          (date-str (ai-code-read-string (format "Start date for history of %s (YYYY-MM-DD, e.g. 2025-01-01): " repo-name)))
@@ -442,14 +454,14 @@ Returns the path to the git.log file."
 
 (defun ai-code-magit-log-analyze ()
   "Analyze Git log with AI.
-If current buffer is visiting a file named 'git.log', analyze its content.
-Otherwise, prompt for number of commits (default 100) and optionally a keyword,
-generate the log, save it to 'PROJECT_ROOT/git.log', open this file, and then analyze its content."
+If current buffer is visiting a file named \\='git.log\\=', analyze its
+content.  Otherwise, prompt for number of commits (default 100) and
+optionally a keyword, generate the log, save it to
+\\='PROJECT_ROOT/git.log\\=', open this file, and then analyze its content."
   (interactive)
   (let* ((git-root (ai-code--validate-git-repository))
          (repo-name (file-name-nondirectory (directory-file-name git-root)))
          (keyword (ai-code-read-string "Optional: Keyword to filter commits (leave empty for no filter): "))
-         (log-file (ai-code--ensure-git-log git-root repo-name keyword))
          (default-analysis (ai-code--default-log-analysis-instructions keyword))
          (analysis-instructions (ai-code-read-string "Analysis instructions for repository log: " default-analysis))
          (prompt (ai-code--build-log-prompt repo-name analysis-instructions)))
@@ -457,7 +469,9 @@ generate the log, save it to 'PROJECT_ROOT/git.log', open this file, and then an
 
 ;;;###autoload
 (defun ai-code-magit-blame-or-log-analyze (&optional arg)
-  "If current buffer is git.log, run log analysis; else if prefix ARG, run log analysis; otherwise run blame analysis."
+  "If current buffer is git.log, run log analysis.
+Otherwise if prefix ARG, run log analysis; else run blame analysis.
+ARG is the prefix argument."
   (interactive "P")
   (cond ((and buffer-file-name
               (string-equal (file-name-nondirectory buffer-file-name) "git.log"))
@@ -472,6 +486,8 @@ This function uses `with-eval-after-load` to ensure that the
 Magit transients are modified only after Magit itself has been loaded.
 Call this function to register the AI Code commands with Magit."
   (interactive)
+  ;; Integration with magit: This with-eval-after-load is intentional
+  ;; to provide optional Magit integration without breaking when Magit is absent
   (with-eval-after-load 'magit
     ;; For magit-diff-popup (usually 'd' in status buffer)
     (transient-append-suffix 'magit-diff "r" ; "Extra" group
@@ -491,8 +507,9 @@ Call this function to register the AI Code commands with Magit."
   "Initialize project helpers for Projectile and Helm-Gtags.
 If either package is available, prompt for a project directory
 defaulting to the Magit repository root, initialize the project in
-Projectile, and configure Helm-Gtags with a pygments label. Show a
-summary message of performed actions."
+Projectile, and configure Helm-Gtags with a pygments label.  Show a
+summary message of performed actions.
+PREFIX is the prefix argument."
   (interactive "P")
   (let* ((projectile-available (or (featurep 'projectile)
                                    (require 'projectile nil t)))

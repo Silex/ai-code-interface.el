@@ -358,7 +358,7 @@
         (throw 'found entry)))))
 
 (defun ai-code--refactoring--get-placeholder (values placeholder)
-  "Retrieve previously captured placeholder value from VALUES."
+  "Retrieve previously captured PLACEHOLDER value from VALUES."
   (cdr (assoc placeholder values)))
 
 (defun ai-code--refactoring--rename-new-name-prompt (_context values _default)
@@ -567,7 +567,7 @@ TDD refactor stage."
 
 (defun ai-code--ensure-test-buffer-visible ()
   "Ensure that at least one buffer in the current windows is a test file.
-A test file is identified by having 'test' in its name (case insensitive).
+A test file is identified by having \\='test\\=' in its name (case insensitive).
 If no such buffer is found, report a user-error."
   (let ((has-test-buffer nil)
         (case-fold-search t))
@@ -606,12 +606,13 @@ If no such buffer is found, report a user-error."
 
 (defun ai-code--tdd-green-stage (function-name)
   "Handle the Green stage of TDD for FUNCTION-NAME: Make the test pass.
-If current file is a test file (contains 'test' in name), provide prompt to fix code."
+If current file is a test file (contains \\='test\\=' in name), provide prompt
+to fix code."
   (ai-code--ensure-test-buffer-visible)
   (let* ((is-test-buffer (and (buffer-file-name) (string-match-p "test" (buffer-file-name))))
          (initial-input
           (if is-test-buffer
-              (format "Current test file: %s\ntest function: %s\n is failing. Please fix the code to make the test pass.\nTest failure details: " 
+              (format "Current test file: %s\ntest function: %s\n is failing. Please fix the code to make the test pass.\nTest failure details: "
                       (file-name-nondirectory (buffer-file-name))
                       (or function-name "some test functions"))
             (if function-name
@@ -622,13 +623,13 @@ If current file is a test file (contains 'test' in name), provide prompt to fix 
          (tdd-instructions
           (format "%s%s\nFollow TDD principles - implement the code needed to make the test pass."
                   implementation-desc file-info)))
-    (ai-code--insert-prompt tdd-instructions)
-    ))
+    (ai-code--insert-prompt tdd-instructions)))
 
 ;;;###autoload
 (defun ai-code-run-test ()
   "Run tests based on the current buffer's mode.
-Checks for specific test runners (python-pytest, jest, ert) and runs them if available."
+Checks for specific test runners \(python-pytest, jest, ert) and runs
+them if available."
   (interactive)
   (cond
    ((derived-mode-p 'python-mode)

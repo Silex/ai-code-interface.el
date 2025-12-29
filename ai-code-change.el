@@ -23,6 +23,13 @@
 (declare-function ai-code--get-git-relative-paths "ai-code-discussion")
 (declare-function ai-code--get-region-location-info "ai-code-discussion")
 (declare-function ai-code--format-repo-context-info "ai-code-file")
+(declare-function flycheck-error-pos "flycheck")
+(declare-function flycheck-error-line "flycheck")
+(declare-function flycheck-error-column "flycheck")
+(declare-function flycheck-error-message "flycheck")
+
+(defvar flycheck-current-errors)
+(defvar region-start-line)
 
 (defun ai-code--is-comment-line (line)
   "Check if LINE is a comment line based on current buffer's comment syntax.
@@ -96,6 +103,7 @@ returns that function's name. Otherwise returns the result of `which-function`."
 
 (defun ai-code--detect-todo-info (region-active)
   "Detect TODO comment information at cursor or in selected region.
+REGION-ACTIVE indicates whether a region is selected.
 Returns (TEXT START-POS END-POS) if TODO found, nil otherwise."
   (let ((text (if region-active
                   (buffer-substring-no-properties (region-beginning) (region-end))
@@ -111,7 +119,10 @@ Returns (TEXT START-POS END-POS) if TODO found, nil otherwise."
                     (if region-active (region-end) (line-end-position))))))))))
 
 (defun ai-code--generate-prompt-label (clipboard-context region-active function-name)
-  "Generate appropriate prompt label based on context."
+  "Generate appropriate prompt label based on context.
+CLIPBOARD-CONTEXT is text from clipboard if any.
+REGION-ACTIVE indicates if a region is selected.
+FUNCTION-NAME is the name of the function at point if any."
   (cond
    ((and clipboard-context
          (string-match-p "\\S-" clipboard-context))
@@ -132,7 +143,9 @@ Returns (TEXT START-POS END-POS) if TODO found, nil otherwise."
    (t "Change code: ")))
 
 (defun ai-code--handle-regular-code-change (arg region-active)
-  "Handle regular code change operation."
+  "Handle regular code change operation.
+ARG is the prefix argument.
+REGION-ACTIVE indicates whether a region is selected."
   (let* ((clipboard-context (when arg (ai-code--get-clipboard-text)))
          (function-name (which-function))
          (region-text (when region-active
@@ -165,7 +178,8 @@ Returns (TEXT START-POS END-POS) if TODO found, nil otherwise."
     (ai-code--insert-prompt final-prompt)))
 
 (defun ai-code--handle-dired-code-change (arg)
-  "Handle code change operation in dired mode."
+  "Handle code change operation in Dired mode.
+ARG is the prefix argument."
   (let* ((clipboard-context (when arg (ai-code--get-clipboard-text)))
          (files (dired-get-marked-files))
          (files-str (mapconcat #'identity files "\n"))
@@ -191,12 +205,12 @@ Returns (TEXT START-POS END-POS) if TODO found, nil otherwise."
 ;;;###autoload
 (defun ai-code-code-change (arg)
   "Generate prompt to change code under cursor or in selected region.
-If the cursor is on a TODO comment or a region with a TODO comment is selected,
-it will generate a prompt to implement the TODO in-place.
-With a prefix argument (C-u), append the clipboard contents as context.
-If a region is selected, change that specific region.
-Otherwise, change the function under cursor.
-If nothing is selected and no function context, prompts for general code change.
+If the cursor is on a TODO comment or a region with a TODO comment is
+selected, it will generate a prompt to implement the TODO in-place.
+With a prefix argument \[universal-argument], append the clipboard
+contents as context.  If a region is selected, change that specific
+region.  Otherwise, change the function under cursor.  If nothing is
+selected and no function context, prompts for general code change.
 Inserts the prompt into the AI prompt file and optionally sends to AI.
 Argument ARG is the prefix argument."
   (interactive "P")
@@ -221,13 +235,13 @@ Argument ARG is the prefix argument."
 (defun ai-code-implement-todo (arg)
   "Generate prompt to implement TODO comments in current context.
 Implements code after TODO comments instead of replacing them in-place.
-With a prefix argument (C-u), append the clipboard contents as context.
-If region is selected, implement that specific region.
-If cursor is on a comment line, implement that specific comment.
+With a prefix argument \\[universal-argument], append the clipboard
+contents as context.  If region is selected, implement that specific
+region.  If cursor is on a comment line, implement that specific comment.
 If the current line is blank, ask user to input TODO comment.
-The input string will be prefixed with TODO: and insert to the current line,
-with proper indentation.
-If cursor is inside a function, implement comments for that function.
+The input string will be prefixed with TODO: and insert to the current
+line, with proper indentation.  If cursor is inside a function, implement
+comments for that function.
 Otherwise implement comments for the entire current file.
 Argument ARG is the prefix argument."
   ;; DONE: if the current line under cursor is a comment prefix with DONE: ,
@@ -284,7 +298,7 @@ Returns non-nil if handled and the caller should exit."
              (or (not (thing-at-point 'line t)) (string-blank-p (thing-at-point 'line t)))
              comment-start)
     (let ((todo-text (ai-code-read-string "Enter TODO comment: "))
-          (comment-prefix (if (eq major-mode 'emacs-lisp-mode)
+          (comment-prefix (if (derived-mode-p 'emacs-lisp-mode)
                               (let* ((trimmed (string-trim-right comment-start)))
                                 (if (= (length trimmed) 1)
                                     (make-string 2 (string-to-char trimmed))
@@ -293,12 +307,12 @@ Returns non-nil if handled and the caller should exit."
       (unless (string-blank-p todo-text)
         (delete-region (line-beginning-position) (line-end-position))
         (indent-according-to-mode)
-        (insert (concat comment-prefix
-                        " TODO: "
-                        todo-text
-                        (if (and comment-end (not (string-blank-p comment-end)))
-                            (concat " " (string-trim-left comment-end))
-                          "")))
+        (insert comment-prefix
+                " TODO: "
+                todo-text
+                (if (and comment-end (not (string-blank-p comment-end)))
+                    (concat " " (string-trim-left comment-end))
+                  ""))
         (indent-according-to-mode)))
     t))
 
@@ -353,11 +367,10 @@ ARG is the prefix argument for clipboard context."
            (region-text
             (unless (ai-code--is-comment-block region-text)
               (user-error "Selected region must be a comment block"))
-            (format (concat
-                     "Please implement code for this requirement comment block in the selected region first. "
-                     "After implementing, keep the comment in place and ensure it begins with a DONE prefix (change TODO to DONE or prepend DONE if no prefix). "
-                     "If this is a pure new code block, place it after the comment; otherwise keep the existing structure and make corresponding change for the context.\n%s\n%s%s%s")
-                    region-location-line region-text function-context files-context-string))
+            (format
+             "Please implement code for this requirement comment block in the selected region first. After implementing, keep the comment in place and ensure it begins with a DONE prefix (change TODO to DONE or prepend DONE if no prefix). If this is a pure new code block, place it after the comment; otherwise keep the existing structure and make corresponding change for the context.\n%s\n%s%s%s"
+             region-location-line region-text function-context
+                    files-context-string))
            (is-comment
             (format "Please implement code for this requirement comment on line %d: '%s' first. After implementing, keep the comment in place and ensure it begins with a DONE prefix (change TODO to DONE or prepend DONE if needed). If this is a pure new code block, place it after the comment; otherwise keep the existing structure and make corresponding change for the context.%s%s"
                     current-line-number current-line function-context files-context-string))
@@ -369,7 +382,7 @@ ARG is the prefix argument for clipboard context."
            ;;          (file-name-nondirectory buffer-file-name) files-context-string))
            ;; DONE: otherwise, let user know the current line is not a comment and cannot proceed
            (t
-            (user-error "Current line is not a TODO comment and cannot proceed with `ai-code-implement-todo`. Please select a TODO comment (not DONE), a region of comments, or activate on a blank line."))))
+            (user-error "Current line is not a TODO comment and cannot proceed with `ai-code-implement-todo'.  Please select a TODO comment (not DONE), a region of comments, or activate on a blank line"))))
          (prompt (ai-code-read-string prompt-label initial-input))
          (final-prompt
           (concat prompt
@@ -381,7 +394,7 @@ ARG is the prefix argument for clipboard context."
 
 ;;; Flycheck integration
 (defun ai-code-flycheck--get-errors-in-scope (start end)
-  "Return a list of Flycheck errors within the given START and END buffer positions."
+  "Return Flycheck errors within given START and END buffer positions."
   (when (and (bound-and-true-p flycheck-mode) flycheck-current-errors)
     (cl-remove-if-not
      (lambda (err)
@@ -493,15 +506,10 @@ or whole file.  Requires the `flycheck` package to be installed and available."
                                                          rel-file))
                    (prompt
                     (if (string-equal "the entire file" scope-description)
-                        (format (concat "Please fix the following Flycheck "
-                                        "errors in file %s:\n\n%s\n%s\n"
-                                        "Note: Please make the code change "
-                                        "described above.")
-                                rel-file error-list-string files-context-string)
-                      (format (concat "Please fix the following Flycheck "
-                                      "errors in %s of file %s:\n\n%s\n%s\n"
-                                      "Note: Please make the code "
-                                      "change described above.")
+                        (format "Please fix the following Flycheck errors in file %s:\n\n%s\n%s\nNote: Please make the code change described above."
+                                rel-file error-list-string
+                                files-context-string)
+                      (format "Please fix the following Flycheck errors in %s of file %s:\n\n%s\n%s\nNote: Please make the code change described above."
                               scope-description
                               rel-file
                               error-list-string

@@ -1,8 +1,6 @@
 ;;; ai-code-interface.el --- AI code interface for editing AI prompt files -*- lexical-binding: t; -*-
 
 ;; Author: Kang Tu <tninja@gmail.com>
-;; Version: 0.72
-;; Package-Requires: ((emacs "26.1") (transient "0.8.0") (magit "2.1.0") (claude-code "0.4.5"))
 
 ;; SPDX-License-Identifier: Apache-2.0
 
@@ -90,7 +88,9 @@ with a newline separator."
 ;;;###autoload
 (defun ai-code-send-command (arg)
   "Read a prompt from the user and send it to the AI service.
-With a prefix argument (\[universal-argument]), append the clipboard contents as context."
+With a prefix argument (\\[universal-argument]), append the clipboard
+contents as context.
+ARG is the prefix argument."
   (interactive "P")
   (let* ((initial-input (when (use-region-p)
                           (string-trim-right
@@ -113,7 +113,8 @@ With a prefix argument (\[universal-argument]), append the clipboard contents as
 
 ;;;###autoload
 (defun ai-code-cli-switch-to-buffer-or-hide ()
-  "Hide current buffer if its name starts and ends with '*', otherwise switch to AI CLI buffer."
+  "Hide current buffer if its name starts and ends with '*'.
+Otherwise switch to AI CLI buffer."
   (interactive)
   (if (and (string-prefix-p "*" (buffer-name))
            (string-suffix-p "*" (buffer-name)))
@@ -199,6 +200,8 @@ Otherwise, run the original command for SPC."
     (when ai-code--original-spc-command-in-evil-normal-state
       (call-interactively ai-code--original-spc-command-in-evil-normal-state))))
 
+;; Integration with evil-mode: This with-eval-after-load is intentional
+;; to provide optional Evil integration without requiring Evil as a dependency
 (with-eval-after-load 'evil
   (when (boundp 'evil-normal-state-map)
     (unless ai-code--original-spc-command-in-evil-normal-state
@@ -211,3 +214,4 @@ Otherwise, run the original command for SPC."
 (provide 'ai-code-interface)
 
 ;;; ai-code-interface.el ends here
+

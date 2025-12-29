@@ -1,5 +1,8 @@
 ;;; ai-code-opencode.el --- Thin wrapper for Opencode  -*- lexical-binding: t; -*-
 
+;; Author: Kang Tu <tninja@gmail.com>
+;; SPDX-License-Identifier: Apache-2.0
+
 ;;; Commentary:
 ;;
 ;; Thin wrapper that reuses `claude-code' to run Opencode.
@@ -11,48 +14,53 @@
 ;;
 ;;; Code:
 
-(require 'claude-code)
-
+(declare-function claude-code "claude-code" (&optional arg))
 (declare-function claude-code--start "claude-code" (arg extra-switches &optional force-prompt force-switch-to-buffer))
 (declare-function claude-code--term-send-string "claude-code" (backend string))
+(declare-function claude-code-switch-to-buffer "claude-code")
+(declare-function claude-code-send-command "claude-code" (line))
 (defvar claude-code-terminal-backend)
 
 
 (defgroup ai-code-opencode nil
   "Opencode integration via `claude-code'."
   :group 'tools
-  :prefix "opencode-")
+  :prefix "ai-code-opencode-")
 
-(defcustom opencode-program "opencode"
+(defcustom ai-code-opencode-program "opencode"
   "Path to the Opencode executable."
   :type 'string
   :group 'ai-code-opencode)
 
-(defcustom opencode-program-switches nil
+(defcustom ai-code-opencode-program-switches nil
   "Command line switches to pass to Opencode on startup."
   :type '(repeat string)
   :group 'ai-code-opencode)
 
 ;;;###autoload
-(defun opencode (&optional arg)
-  "Start Opencode (reuses `claude-code' startup logic)."
+(defun ai-code-opencode (&optional arg)
+  "Start Opencode (reuses `claude-code' startup logic).
+ARG is passed to `claude-code'."
   (interactive "P")
-  (let ((claude-code-program opencode-program) ; override dynamically
-        (claude-code-program-switches opencode-program-switches))
+  (let ((claude-code-program ai-code-opencode-program)
+        (claude-code-program-switches ai-code-opencode-program-switches))
     (claude-code arg)))
 
 ;;;###autoload
-(defun opencode-switch-to-buffer ()
+(defun ai-code-opencode-switch-to-buffer ()
+  "Switch to the Opencode buffer."
   (interactive)
   (claude-code-switch-to-buffer))
 
 ;;;###autoload
-(defun opencode-send-command (line)
+(defun ai-code-opencode-send-command (line)
+  "Send LINE to Opencode.
+When called interactively, prompts for the command."
   (interactive "sOpencode> ")
   (claude-code-send-command line))
 
 ;;;###autoload
-(defun opencode-resume (&optional arg)
+(defun ai-code-opencode-resume (&optional arg)
   "Resume a previous Opencode session.
 
 This command starts Opencode with the --resume flag to resume
@@ -66,8 +74,8 @@ or the current value of `default-directory' if no project and no buffer file.
 With double prefix ARG (\\[universal-argument] \\[universal-argument]),
 prompt for the project directory."
   (interactive "P")
-  (let ((claude-code-program opencode-program)
-        (claude-code-program-switches opencode-program-switches))
+  (let ((claude-code-program ai-code-opencode-program)
+        (claude-code-program-switches ai-code-opencode-program-switches))
     (claude-code--start arg '("resume") nil t)
     (claude-code--term-send-string claude-code-terminal-backend "")
     (with-current-buffer claude-code-terminal-backend
@@ -76,3 +84,4 @@ prompt for the project directory."
 (provide 'ai-code-opencode)
 
 ;;; ai-code-opencode.el ends here
+

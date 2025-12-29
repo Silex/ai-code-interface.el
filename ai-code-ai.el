@@ -15,13 +15,15 @@
 (require 'ai-code-input)
 
 (declare-function ai-code-read-string "ai-code-input")
+(declare-function eshell-send-input "esh-mode")
 (defvar ai-code-selected-backend)
 
 ;;;###autoload
 (defun ai-code-debug-mcp ()
   "Debug MCP by choosing to run mcp, inspector, or generate a config.
-If current buffer is a python file, ask user to choose either 'Run mcp',
-'Run inspector', 'Open inspector.sh', or 'Generate mcp config', and call the matching helper."
+If current buffer is a python file, ask user to choose either
+\\='Run mcp\\=', \\='Run inspector\\=', \\='Open inspector.sh\\=',
+or \\='Generate mcp config\\=', and call the matching helper."
   (interactive)
   (let ((choice (completing-read "Choose MCP action: "
                                  '("Run mcp" "Run inspector" "Open inspector.sh" "Generate mcp config")
@@ -85,8 +87,7 @@ BASE-DIR-PATH and RELATIVE-PATH populate the uv command arguments."
      `(("mcpServers"
         . ((,server-label
             . (("command" . "uv")
-               ("args" . ["--directory" ,base-dir-path "run" ,relative-path])
-               ))))))))
+               ("args" . ["--directory" ,base-dir-path "run" ,relative-path])))))))))
 
 (defun ai-code--mcp-config-toml (server-label base-dir-path relative-path)
   "Return Codex TOML MCP config snippet for SERVER-LABEL.
@@ -107,8 +108,10 @@ BASE-DIR-PATH and RELATIVE-PATH populate the uv command arguments."
 ;;;###autoload
 (defun ai-code-mcp-run ()
   "Run python mcp with uv command.
-Run command: uv --directory <project-root-base-dir> run <relative-path-to-current-buffer file>.
-Execute in compilation buffer named *ai-code-mcp-run:<full-path-of-python-file>*.
+Run command: uv --directory PROJECT-ROOT-BASE-DIR run
+RELATIVE-PATH-TO-CURRENT-BUFFER-FILE.
+Execute in compilation buffer named
+*ai-code-mcp-run:FULL-PATH-OF-PYTHON-FILE*.
 If current buffer is not a python file, message user and quit."
   (interactive)
   (let ((current-file (buffer-file-name)))
@@ -212,8 +215,9 @@ current buffer is unsupported or user input is missing."
              (server-port (+ 9001 hash-offset))
              (client-port (+ 8081 hash-offset))
              (buffer-name (format "*%s:client=%d:server=%s*" base-dir-name client-port server-port))
-             (command (ai-code-mcp-inspector--build-command is-dired base-dir base-dir-name
-                                                            client-port server-port relative-path)))
+             (command (ai-code-mcp-inspector--build-command
+                       is-dired base-dir base-dir-name
+                       client-port server-port relative-path)))
         (when command
           (list :base-dir base-dir
                 :base-dir-name base-dir-name
@@ -224,10 +228,13 @@ current buffer is unsupported or user input is missing."
                 :display-entries (cons (cons "Base directory" base-dir)
                                        display-entries)))))))
 
-(defun ai-code-mcp-inspector--build-command (is-dired base-dir base-dir-name client-port server-port relative-path)
+(defun ai-code-mcp-inspector--build-command (is-dired base-dir base-dir-name
+                                                     client-port svr-port
+                                                     relative-path)
   "Construct the inspector command string for the current context.
-IS-DIRED selects interactive input, BASE-DIR and BASE-DIR-NAME describe the project,
-CLIENT-PORT and SERVER-PORT configure networking, and RELATIVE-PATH targets a file."
+IS-DIRED selects interactive input, BASE-DIR and BASE-DIR-NAME describe
+the project, CLIENT-PORT and SVR-PORT configure networking, and
+RELATIVE-PATH targets a file."
   (if is-dired
       (let ((user-command (ai-code-read-string (format "Inspector command for %s: " base-dir-name))))
         (if (string-match-p "\\`[ \t\n\r]*\\'" user-command)
@@ -235,14 +242,15 @@ CLIENT-PORT and SERVER-PORT configure networking, and RELATIVE-PATH targets a fi
               (message "Inspector command is required")
               nil)
           (format "CLIENT_PORT=%d SERVER_PORT=%d %s"
-                  client-port server-port user-command)))
+                  client-port svr-port user-command)))
     (when relative-path
       (format
        "CLIENT_PORT=%d SERVER_PORT=%d npx @modelcontextprotocol/inspector -e VERIFY_SSL=true -e FASTMCP_LOG_LEVEL=INFO uv run --directory %s %s "
-       client-port server-port base-dir base-dir-name))))
+       client-port svr-port base-dir base-dir-name))))
 
 (defun ai-code-mcp-inspector--start (context)
-  "Launch the inspector using CONTEXT plist produced by `ai-code-mcp-inspector--build-context'."
+  "Launch the inspector using CONTEXT plist.
+Produced by `ai-code-mcp-inspector--build-context'."
   (let* ((base-dir (plist-get context :base-dir))
          (base-dir-name (plist-get context :base-dir-name))
          (buffer-name (plist-get context :buffer-name))
@@ -286,7 +294,8 @@ Starts from current buffer file or default directory."
       nil)))
 
 (defun ai-code-mcp-inspector--find-project-root (file-path)
-  "Find project root by looking for pyproject.toml in parent directories starting from FILE-PATH."
+  "Find project root by looking for pyproject.toml in parent directories.
+Starting from FILE-PATH."
   (let ((dir (file-name-directory file-path)))
     (while (and dir
                 (not (string= dir "/"))
