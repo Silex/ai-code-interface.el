@@ -6,6 +6,8 @@
 ** 0.74
 - Feat: Add ai-code-insert-function-at-point, it is useful during writing TODO comment, to implement a feature referring to an existing function, from visible buffers
 - Feat: Explain code in scope feature added choices: A. files visible; B. git repository
+- Chore: Update AI backend upgrade & resume commands
+- Fix: Improve the gptel generated shell command (C-c a !) should be one liner
 
 ** 0.73
 - Fix: Fix errors and warnings reported by melpazoid workflow
