@@ -1,4 +1,4 @@
-;;; ai-code.el --- Unified interface for multiple AI coding CLI tool -*- lexical-binding: t; -*-
+;;; ai-code.el --- Unified interface for AI coding CLI tool such as Codex, Copilot CLI, Opencode, Grok CLI, etc -*- lexical-binding: t; -*-
 
 ;; Author: Kang Tu <tninja@gmail.com>
 ;; Version: 0.81
@@ -12,6 +12,8 @@
 ;; development CLI tools. Its purpose is to offer a consistent user experience
 ;; across different AI backends while integrating seamlessly with AI-driven
 ;; agile development workflows.
+;;
+;; URL: https://github.com/tninja/ai-code-interface.el
 ;;
 ;; Supported AI coding CLIs include:
 ;;   - Claude Code (claude-code.el)
