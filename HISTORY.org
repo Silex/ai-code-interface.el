@@ -3,6 +3,9 @@
 
 ** Main branch change
 
+** 0.81
+- Fix: a couple of opencode related config / command
+
 ** 0.80
 - Published to MELPA, update README and package description
 
