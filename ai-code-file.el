@@ -18,8 +18,11 @@
 (require 'ai-code-prompt-mode)
 
 (declare-function ai-code-read-string "ai-code-input")
+(declare-function ai-code--get-context-files-string "ai-code-input")
+(declare-function ai-code--insert-prompt "ai-code-prompt-mode" (prompt-text))
 (declare-function ai-code--process-word-for-filepath "ai-code-prompt-mode" (word git-root-truename))
 (declare-function ai-code-call-gptel-sync "ai-code-prompt-mode" (prompt))
+(declare-function projectile-project-root "projectile")
 
 (defcustom ai-code-sed-command "sed"
   "GNU sed command used to apply prompts to files."
@@ -322,6 +325,29 @@ is active; otherwise run the current file."
       (ai-code-shell-cmd initial-input)))
    (t
     (ai-code-run-current-file))))
+
+;;;###autoload
+(defun ai-code-build-project ()
+  "Build the current project.
+Check for build.sh in the project root and run it if found.
+Otherwise, ask AI to generate a build command."
+  (interactive)
+  ;; DONE: If projectile package, is available, first check the build.sh in
+  ;; the projectile root dir. Otherwise, check the git root dir.
+  (let* ((proj-root (or (and (fboundp 'projectile-project-root)
+                             (ignore-errors (projectile-project-root)))
+                        (magit-toplevel)))
+         (build-script (when proj-root (expand-file-name "build.sh" proj-root))))
+    (if (and proj-root build-script (file-exists-p build-script))
+        (let ((default-directory proj-root)
+              (buffer-name (format "*ai-code-build: %s*" (file-name-nondirectory (directory-file-name proj-root)))))
+          (compilation-start "bash build.sh" nil (lambda (_mode) buffer-name)))
+      (let* ((repo-context (ai-code--format-repo-context-info))
+             (initial-input (concat "Build the current project. Provide the build command and execute it if possible. "
+                             (when proj-root (format "\nProject root: %s" proj-root))
+                             (when repo-context (concat "\n" repo-context))))
+             (prompt (ai-code-read-string "Send to AI: " initial-input)))
+        (ai-code--insert-prompt prompt)))))
 
 (defvar ai-code--repo-context-info (make-hash-table :test #'equal)
   "Hash table storing context info lists per Git repository root.")
