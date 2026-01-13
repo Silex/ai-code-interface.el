@@ -106,7 +106,7 @@ Enable installation of packages from MELPA by adding an entry to package-archive
    Supported options:
    - Claude Code (`[[https://github.com/stevemolitor/claude-code.el][claude-code.el]]`)
    - Claude Code IDE (`[[https://github.com/manzaltu/claude-code-ide.el][claude-code-ide.el]]`)
-   - Gemini CLI (`[[https://github.com/linchen2chris/gemini-cli.el][gemini-cli.el]]`)
+   - [[https://github.com/google-gemini/gemini-cli][Gemini CLI]] (`[[./ai-code-gemini-cli.el][ai-code-gemini-cli.el]]`)
    - [[https://github.com/openai/codex][OpenAI codex CLI]] (`[[./ai-code-codex-cli.el][ai-code-codex-cli.el]]`)
    - [[https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli][GitHub Copilot CLI]] (`[[./ai-code-github-copilot-cli.el][ai-code-github-copilot-cli.el]]`)
    - [[https://opencode.ai/][Opencode]] (`[[./ai-code-opencode.el][ai-code-opencode.el]]`)
@@ -149,7 +149,8 @@ Enable installation of packages from MELPA by adding an entry to package-archive
 
 ** FAQ
 
-- Q: Using OpenCode as backend, it might have performance issues with eat.el in Doom Emacs. [[https://github.com/tninja/ai-code-interface.el/issues/9#issuecomment-3543277108][Issue]]
+*** Q: Using OpenCode as backend, it might have performance issues with eat.el in Doom Emacs. [[https://github.com/tninja/ai-code-interface.el/issues/9#issuecomment-3543277108][Issue]]
+
 - A: Use vterm as backend, opencode won't trigger mouse hover and will not cause emacs flickering. Set "theme" to system in openocde config can reduce glitches. From [[https://github.com/tninja/ai-code-interface.el/issues/9#issuecomment-3543335121][gkzhb's answer]]:
 #+begin_src json
 {
@@ -157,6 +158,18 @@ Enable installation of packages from MELPA by adding an entry to package-archive
   "theme": "system"
 }
 #+end_src
+
+*** Q: Gemini CLI response is relatively slow, how to improve?
+
+- A: use gemini-3-flash model, it is pretty fast, with good quality (being able to solve leetcode hard problems). And it is FREE. You can set the following in your emacs config:
+
+#+begin_src elisp
+  (setq ai-code-gemini-cli-program-switches '("--model" "gemini-3-flash-preview"))
+#+end_src
+
+*** Q: Codex CLI uses my API key, instead of my ChatGPT Plus subscription and costs money, how to fix that? 
+
+- A: use `codex login` to login with your OpenAI account that has ChatGPT Plus subscription. After that, Codex CLI will use your ChatGPT Plus subscription automatically. To confirm, check with /status inside the codex CLI buffer.
 
 ** AI Assisted Programming related books
 
