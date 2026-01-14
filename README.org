@@ -43,7 +43,8 @@ Enable installation of packages from MELPA by adding an entry to package-archive
 #+begin_src emacs-lisp
   (use-package ai-code
     :config
-    (ai-code-set-backend 'codex) ;; use codex as backend, other options are 'gemini, 'github-copilot-cli, 'opencode, 'grok, 'claude-code-ide, 'claude-code
+    ;; use codex as backend, other options are 'gemini, 'github-copilot-cli, 'opencode, 'grok, 'claude-code-ide, 'claude-code
+    (ai-code-set-backend 'codex)
     ;; Enable global keybinding for the main menu
     (global-set-key (kbd "C-c a") #'ai-code-menu)
     ;; Optional: Use vterm if you prefer, by default it is eat
@@ -62,7 +63,8 @@ Enable installation of packages from MELPA by adding an entry to package-archive
   (use-package ai-code
     :straight (:host github :repo "tninja/ai-code-interface.el")
     :config
-    (ai-code-set-backend 'codex) ;; use codex as backend, other options are 'gemini, 'github-copilot-cli, 'opencode, 'grok, 'claude-code-ide, 'claude-code
+    ;; use codex as backend, other options are 'gemini, 'github-copilot-cli, 'opencode, 'grok, 'claude-code-ide, 'claude-code
+    (ai-code-set-backend 'codex)
     ;; Enable global keybinding for the main menu
     (global-set-key (kbd "C-c a") #'ai-code-menu)
     ;; Optional: Use vterm if you prefer, by default it is eat
