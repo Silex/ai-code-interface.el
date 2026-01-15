@@ -13,7 +13,7 @@
 (require 'ai-code-backends-infra)
 
 (defgroup ai-code-grok-cli nil
-  "Grok CLI integration via `claude-code'."
+  "Grok CLI integration via `ai-code-backends-infra.el'."
   :group 'tools
   :prefix "ai-code-grok-cli-")
 

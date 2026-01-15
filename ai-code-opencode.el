@@ -19,7 +19,7 @@
 
 
 (defgroup ai-code-opencode nil
-  "Opencode integration via `claude-code'."
+  "Opencode integration via `ai-code-backends-infra.el'."
   :group 'tools
   :prefix "ai-code-opencode-")
 
