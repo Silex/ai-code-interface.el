@@ -2,6 +2,7 @@
 * Release history
 
 ** Main branch change
+- Feat: add cursor-cli support, by donneyluck
 
 ** 0.91
 - Fix: Weird ai-code-backends-infra.el loading bug, by Silex, and opencode start issue, by e665107
