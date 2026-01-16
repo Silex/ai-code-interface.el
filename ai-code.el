@@ -22,10 +22,7 @@
 ;;   - GitHub Copilot CLI
 ;;   - Opencode
 ;;   - Grok CLI
-;;
-;; Dependency: ai-code-backends-infra.el provides shared terminal infrastructure
-;; (eat / vterm integration, which need to be installed) for Gemini CLI, OpenAI
-;; Codex,  GitHub Copilot CLI, Opencode, and Grok CLI backends.
+;;   - Cursor CLI
 ;;
 ;; Basic configuration example:
 ;;
