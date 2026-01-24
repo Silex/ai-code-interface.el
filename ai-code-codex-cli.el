@@ -37,12 +37,16 @@
 ;;;###autoload
 (defun ai-code-codex-cli (&optional arg)
   "Start Codex (uses `ai-code-backends-infra' logic).
-With prefix ARG, prompt for a new instance name."
+With prefix ARG, prompt for CLI args using
+`ai-code-codex-cli-program-switches' as the default input."
   (interactive "P")
   (let* ((working-dir (ai-code-backends-infra--session-working-directory))
-         (force-prompt (and arg t))
-         (command (concat ai-code-codex-cli-program " "
-                          (mapconcat 'identity ai-code-codex-cli-program-switches " "))))
+         (resolved (ai-code-backends-infra--resolve-start-command
+                    ai-code-codex-cli-program
+                    ai-code-codex-cli-program-switches
+                    arg
+                    "Codex"))
+         (command (plist-get resolved :command)))
     (ai-code-backends-infra--toggle-or-create-session
      working-dir
      nil
@@ -52,7 +56,7 @@ With prefix ARG, prompt for a new instance name."
      nil
      nil
      ai-code-codex-cli--session-prefix
-     force-prompt)))
+     nil)))
 
 ;;;###autoload
 (defun ai-code-codex-cli-switch-to-buffer (&optional force-prompt)

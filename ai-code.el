@@ -191,7 +191,7 @@ Shows the current backend label to the right."
   "Transient menu for AI Code Interface interactive functions."
   ["AI Code Commands"
    ["AI CLI session"
-    ("a" "Start AI CLI" ai-code-cli-start)
+    ("a" "Start AI CLI (C-u: args)" ai-code-cli-start)
     ("R" "Resume AI CLI" ai-code-cli-resume)
     ("z" "Switch to AI CLI (C-u: hide)" ai-code-cli-switch-to-buffer-or-hide)
     ;; Use plist style to provide a dynamic description function.

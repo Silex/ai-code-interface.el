@@ -388,6 +388,22 @@ If FORCE-PROMPT is nil and there are no existing instances, return \"default\"."
         proposed-name)
     "default"))
 
+(defun ai-code-backends-infra--resolve-start-command (program switches arg &optional prompt-label)
+  "Build command string for PROGRAM and SWITCHES.
+When ARG is non-nil, prompt for CLI args using SWITCHES as default input.
+PROMPT-LABEL is used in the minibuffer prompt."
+  (let* ((default-args (mapconcat #'identity switches " "))
+         (prompt (format "%s args: " (or prompt-label "CLI")))
+         (prompt-args (when arg
+                        (read-string prompt default-args)))
+         (resolved-args (if arg
+                            (split-string-shell-command prompt-args)
+                          switches))
+         (command (mapconcat #'identity
+                             (cons program resolved-args)
+                             " ")))
+    (list :command command :args resolved-args)))
+
 (defun ai-code-backends-infra--cleanup-session (directory buffer-name process-table
                                                           &optional instance-name prefix)
   "Clean up a session for DIRECTORY using BUFFER-NAME and PROCESS-TABLE."

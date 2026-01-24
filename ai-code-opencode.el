@@ -42,12 +42,16 @@
 ;;;###autoload
 (defun ai-code-opencode (&optional arg)
   "Start Opencode (uses `ai-code-backends-infra' logic).
-With prefix ARG, prompt for a new instance name."
+With prefix ARG, prompt for CLI args using
+`ai-code-opencode-program-switches' as the default input."
   (interactive "P")
   (let* ((working-dir (ai-code-backends-infra--session-working-directory))
-         (force-prompt (and arg t))
-         (command (concat ai-code-opencode-program " "
-                          (mapconcat 'identity ai-code-opencode-program-switches " "))))
+         (resolved (ai-code-backends-infra--resolve-start-command
+                    ai-code-opencode-program
+                    ai-code-opencode-program-switches
+                    arg
+                    "Opencode"))
+         (command (plist-get resolved :command)))
     (ai-code-backends-infra--toggle-or-create-session
      working-dir
      nil
@@ -57,7 +61,7 @@ With prefix ARG, prompt for a new instance name."
      nil
      nil
      ai-code-opencode--session-prefix
-     force-prompt)))
+     nil)))
 
 ;;;###autoload
 (defun ai-code-opencode-switch-to-buffer (&optional force-prompt)

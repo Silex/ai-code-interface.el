@@ -37,12 +37,16 @@
 ;;;###autoload
 (defun ai-code-cursor-cli (&optional arg)
   "Start Cursor CLI (uses `ai-code-backends-infra' logic).
-With prefix ARG, prompt for a new instance name."
+With prefix ARG, prompt for CLI args using
+`ai-code-cursor-cli-program-switches' as the default input."
   (interactive "P")
   (let* ((working-dir (ai-code-backends-infra--session-working-directory))
-         (force-prompt (and arg t))
-         (command (concat ai-code-cursor-cli-program " "
-                          (mapconcat 'identity ai-code-cursor-cli-program-switches " "))))
+         (resolved (ai-code-backends-infra--resolve-start-command
+                    ai-code-cursor-cli-program
+                    ai-code-cursor-cli-program-switches
+                    arg
+                    "Cursor"))
+         (command (plist-get resolved :command)))
     (ai-code-backends-infra--toggle-or-create-session
      working-dir
      nil
@@ -52,7 +56,7 @@ With prefix ARG, prompt for a new instance name."
      nil
      nil
      ai-code-cursor-cli--session-prefix
-     force-prompt)))
+     nil)))
 
 ;;;###autoload
 (defun ai-code-cursor-cli-switch-to-buffer (&optional force-prompt)

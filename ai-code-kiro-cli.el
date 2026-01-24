@@ -44,25 +44,36 @@
 (defvar ai-code-kiro-cli--processes (make-hash-table :test 'equal)
   "Hash table mapping Kiro session keys to processes.")
 
-(defun ai-code-kiro-cli--build-command ()
-  "Build the Kiro CLI command string."
-  (let ((args (list ai-code-kiro-cli-program "chat")))
+(defun ai-code-kiro-cli--build-args ()
+  "Build the Kiro CLI argument list."
+  (let ((args (list "chat")))
     (when ai-code-kiro-cli-trust-all-tools
       (setq args (append args '("--trust-all-tools"))))
     (when ai-code-kiro-cli-agent
       (setq args (append args (list "--agent" ai-code-kiro-cli-agent))))
     (when ai-code-kiro-cli-program-switches
       (setq args (append args ai-code-kiro-cli-program-switches)))
-    (mapconcat 'identity args " ")))
+    args))
+
+(defun ai-code-kiro-cli--build-command ()
+  "Build the Kiro CLI command string."
+  (mapconcat 'identity
+             (cons ai-code-kiro-cli-program (ai-code-kiro-cli--build-args))
+             " "))
 
 ;;;###autoload
 (defun ai-code-kiro-cli (&optional arg)
   "Start Kiro CLI chat session.
-With prefix ARG, prompt for a new instance name."
+With prefix ARG, prompt for CLI args using the current defaults
+(chat, agent, trust flags, and `ai-code-kiro-cli-program-switches')."
   (interactive "P")
   (let* ((working-dir (ai-code-backends-infra--session-working-directory))
-         (force-prompt (and arg t))
-         (command (ai-code-kiro-cli--build-command))
+         (resolved (ai-code-backends-infra--resolve-start-command
+                    ai-code-kiro-cli-program
+                    (ai-code-kiro-cli--build-args)
+                    arg
+                    "Kiro"))
+         (command (plist-get resolved :command))
          (instance-name nil))
     (unless force-prompt
       (when-let ((existing-buffer
@@ -82,7 +93,7 @@ With prefix ARG, prompt for a new instance name."
      nil
      instance-name
      ai-code-kiro-cli--session-prefix
-     force-prompt)))
+     nil)))
 
 ;;;###autoload
 (defun ai-code-kiro-cli-switch-to-buffer (&optional force-prompt)
