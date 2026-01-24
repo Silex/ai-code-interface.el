@@ -4,3 +4,5 @@ GTAGS
 GRTAGS
 GPATH
 .ai.code.notes.org
+.ai.code.files/
+__pycache__/
