@@ -16,12 +16,12 @@
   "Desktop notifications for AI Code Interface."
   :group 'tools)
 
-(defcustom ai-code-notifications-enabled t
+(defcustom ai-code-notifications-enabled nil
   "Whether to enable desktop notifications for AI responses."
   :type 'boolean
   :group 'ai-code-notifications)
 
-(defcustom ai-code-notifications-show-on-response t
+(defcustom ai-code-notifications-show-on-response nil
   "Whether to show a notification when AI completes a response."
   :type 'boolean
   :group 'ai-code-notifications)
