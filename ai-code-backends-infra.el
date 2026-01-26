@@ -110,13 +110,71 @@ Can be either `vterm' or `eat'."
 (defvar ai-code-backends-infra--directory-buffer-map (make-hash-table :test 'equal)
   "Hash table mapping (prefix . directory) to last selected session buffer.")
 
+(defvar-local ai-code-backends-infra--last-activity-time nil
+  "Time of the last terminal activity in this buffer.")
+
+(defvar-local ai-code-backends-infra--idle-timer nil
+  "Timer for detecting idle state (response completion).")
+
+(defcustom ai-code-backends-infra-idle-delay 1.5
+  "Delay in seconds of inactivity before considering response complete.
+After this period of terminal inactivity, a notification may be sent
+if the AI session buffer is not currently visible."
+  :type 'number
+  :group 'ai-code-backends-infra)
+
 ;;; Vterm Rendering Optimization
 
 (defvar-local ai-code-backends-infra--vterm-render-queue nil)
 (defvar-local ai-code-backends-infra--vterm-render-timer nil)
 
+(defvar ai-code-backends-infra--vterm-advices-installed nil
+  "Flag indicating whether vterm filter advices have been installed globally.")
+
+(declare-function ai-code-notifications-response-ready "ai-code-notifications" (&optional backend-name))
+
+(defun ai-code-backends-infra--check-response-complete (buffer)
+  "Check if AI response is complete in BUFFER and notify if enabled."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (when (null (get-buffer-window-list buffer nil t))
+        (when (require 'ai-code-notifications nil t)
+          (when (fboundp 'ai-code-notifications-response-ready)
+            (let ((buffer-name (buffer-name buffer)))
+              ;; Extract backend name from buffer name format: *<backend>[<dir>]*
+              ;; Example: "*codex[my-project]*" extracts "codex"
+              ;; Regex breakdown:
+              ;;   \\*       - matches literal asterisk
+              ;;   \\(       - start capture group 1
+              ;;   [^[]+     - one or more chars that are not '['
+              ;;   \\)       - end capture group 1 (this is the backend name)
+              ;;   \\[       - matches literal '['
+              (when (string-match "\\*\\([^[]+\\)\\[" buffer-name)
+                (let ((backend-name (match-string 1 buffer-name)))
+                  (ai-code-notifications-response-ready backend-name))))))))))
+
+(defun ai-code-backends-infra--schedule-idle-check ()
+  "Schedule a check for response completion after idle period."
+  (when ai-code-backends-infra--idle-timer
+    (cancel-timer ai-code-backends-infra--idle-timer))
+  (let ((buffer (current-buffer)))
+    (setq ai-code-backends-infra--idle-timer
+          (run-at-time ai-code-backends-infra-idle-delay nil
+                       #'ai-code-backends-infra--check-response-complete
+                       buffer))))
+
+(defun ai-code-backends-infra--vterm-notification-tracker (orig-fun process input)
+  "Track vterm activity for notification purposes, then call ORIG-FUN."
+  (when (ai-code-backends-infra--session-buffer-p (process-buffer process))
+    (with-current-buffer (process-buffer process)
+      (setq ai-code-backends-infra--last-activity-time (current-time))
+      (ai-code-backends-infra--schedule-idle-check)))
+  (funcall orig-fun process input))
+
 (defun ai-code-backends-infra--vterm-smart-renderer (orig-fun process input)
-  "Smart rendering filter for optimized vterm display updates."
+  "Smart rendering filter for optimized vterm display updates.
+Activity tracking for notifications is handled separately by
+`ai-code-backends-infra--vterm-notification-tracker'."
   (if (or (not ai-code-backends-infra-vterm-anti-flicker)
           (not (ai-code-backends-infra--session-buffer-p (process-buffer process))))
       (funcall orig-fun process input)
@@ -162,8 +220,14 @@ Can be either `vterm' or `eat'."
     (set-process-query-on-exit-flag proc nil)
     (when (fboundp 'process-put)
       (process-put proc 'read-output-max 4096)))
-  (when ai-code-backends-infra-vterm-anti-flicker
-    (advice-add 'vterm--filter :around #'ai-code-backends-infra--vterm-smart-renderer)))
+  ;; Install vterm filter advices globally (only once)
+  (unless ai-code-backends-infra--vterm-advices-installed
+    ;; Always install notification tracker for session buffers
+    (advice-add 'vterm--filter :around #'ai-code-backends-infra--vterm-notification-tracker)
+    ;; Conditionally install anti-flicker renderer
+    (when ai-code-backends-infra-vterm-anti-flicker
+      (advice-add 'vterm--filter :around #'ai-code-backends-infra--vterm-smart-renderer))
+    (setq ai-code-backends-infra--vterm-advices-installed t)))
 
 ;;; Terminal Backend Abstraction
 
@@ -561,6 +625,19 @@ ENV-VARS is a list of environment variables."
           (unless (eq major-mode 'eat-mode) (eat-mode))
           (setq-local process-environment (append env-vars process-environment))
           (eat-exec buffer buffer-name program nil args)
+          ;; Add process filter to track activity for notifications
+          (when-let ((proc (get-buffer-process buffer)))
+            (let ((orig-filter (process-filter proc)))
+              (set-process-filter
+               proc
+               (lambda (process output)
+                 ;; Call original filter first
+                 (when orig-filter
+                   (funcall orig-filter process output))
+                 ;; Then track activity for notifications
+                 (with-current-buffer (process-buffer process)
+                   (setq ai-code-backends-infra--last-activity-time (current-time))
+                   (ai-code-backends-infra--schedule-idle-check))))))
           (cons buffer (get-buffer-process buffer)))))
      (t (error "Unknown backend")))))
 
