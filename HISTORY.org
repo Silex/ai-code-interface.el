@@ -2,7 +2,11 @@
 * Release history
 
 ** Main branch change
+
+** 1.20
 - Feat: Add ai-code-claude-code.el, a built-in Claude Code backend using ai-code-backends-infra (no external package required)
+- Feat: Add desktop notification support for AI response completion (experimental), suggested and reviewed by Silex
+- Fix: Couple of bugs inside ai-code-prompt-mode.el, reported and fix suggested by lesteral
 
 ** 1.01
 - Chore: C-u on ai-code-cli-start will prompt user to enter CLI args
