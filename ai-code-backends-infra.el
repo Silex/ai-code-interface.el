@@ -116,6 +116,9 @@ Can be either `vterm' or `eat'."
 (defvar-local ai-code-backends-infra--idle-timer nil
   "Timer for detecting idle state (response completion).")
 
+(defvar-local ai-code-backends-infra--last-activity-visible nil
+  "Non-nil when the last terminal activity occurred in a visible window.")
+
 (defcustom ai-code-backends-infra-idle-delay 5.0
   "Delay in seconds of inactivity before considering response complete.
 After this period of terminal inactivity, a notification may be sent
@@ -137,7 +140,8 @@ if the AI session buffer is not currently visible."
   "Check if AI response is complete in BUFFER and notify if enabled."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
-      (when (null (get-buffer-window-list buffer nil t))
+      (when (and (null (get-buffer-window-list buffer nil t))
+                 (not ai-code-backends-infra--last-activity-visible))
         (when (require 'ai-code-notifications nil t)
           (when (fboundp 'ai-code-notifications-response-ready)
             (let ((buffer-name (buffer-name buffer)))
@@ -168,6 +172,8 @@ if the AI session buffer is not currently visible."
   (when (ai-code-backends-infra--session-buffer-p (process-buffer process))
     (with-current-buffer (process-buffer process)
       (setq ai-code-backends-infra--last-activity-time (current-time))
+      (setq ai-code-backends-infra--last-activity-visible
+            (and (get-buffer-window-list (current-buffer) nil t) t))
       (ai-code-backends-infra--schedule-idle-check)))
   (funcall orig-fun process input))
 
@@ -637,6 +643,8 @@ ENV-VARS is a list of environment variables."
                  ;; Then track activity for notifications
                  (with-current-buffer (process-buffer process)
                    (setq ai-code-backends-infra--last-activity-time (current-time))
+                   (setq ai-code-backends-infra--last-activity-visible
+                         (and (get-buffer-window-list (current-buffer) nil t) t))
                    (ai-code-backends-infra--schedule-idle-check))))))
           (cons buffer (get-buffer-process buffer)))))
      (t (error "Unknown backend")))))
