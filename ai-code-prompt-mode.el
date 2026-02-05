@@ -27,6 +27,7 @@
 (declare-function ai-code--git-ignored-repo-file-p "ai-code-git" (file root))
 (declare-function ai-code--hash-completion-target-file "ai-code-input" (&optional end-pos))
 (declare-function ai-code--choose-symbol-from-file "ai-code-input" (file))
+(declare-function ai-code-current-backend-label "ai-code-backends" ())
 
 (defcustom ai-code-prompt-preprocess-filepaths t
   "When non-nil, preprocess the prompt to replace file paths.
@@ -517,6 +518,9 @@ using GPTel, and creates the task file."
           (insert (format "#+DATE: %s\n" (format-time-string "%Y-%m-%d")))
           (unless (string-empty-p task-url)
             (insert (format "#+URL: %s\n" task-url)))
+          (let* ((label (ai-code-current-backend-label))
+                 (field (upcase (replace-regexp-in-string "[^A-Za-z0-9]+" "_" label))))
+            (insert (format "#+%s_SESSION_ID: <Usually you can get the session id with /status or /stat in AI coding window>\n" field)))
           (insert "\n* Task Description\n\n")
           (insert task-name)
           (insert "\n\n* Investigation\n\n")
