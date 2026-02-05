@@ -2,11 +2,12 @@
 * Release history
 
 ** Main branch change
+
+** 1.40
 - Chore: Enhance candidate filepath list for @ character
   - visible files logic support out of repo file
   - recent focused buffer file or dir in candidate list
 - Feat: In AI coding session buffers, SPC in Evil normal state now triggers the prompt-entry UI
-
 - Feat: Add CodeBuddy Code CLI backend support, by liaohanqin & CodeBuddy
 - Feat: Add # class / function name completion in AI prompts, comments and AI coding session
 - Chore: Include Dired directories in current frame for Git root paths list
