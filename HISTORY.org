@@ -2,6 +2,9 @@
 * Release history
 
 ** Main branch change
+
+** 1.42
+- Fix: Handle github copilot cli prompt sent truncate issue
 - Feat: Add ai-code-auto-test-type selection to optionally let AI test the code after changes
 - Chore: Let AI build / test the project, and get output as context
 - Feat: Add Aider CLI support as a new AI backend integration
