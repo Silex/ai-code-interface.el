@@ -34,8 +34,8 @@
 ;; Variables that will be defined in ai-code.el
 (defvar ai-code-use-prompt-suffix)
 (defvar ai-code-prompt-suffix)
-(defvar ai-code-test-after-code-change)
-(defvar ai-code-test-after-code-change-suffix)
+(defvar ai-code-auto-test-type)
+(defvar ai-code-auto-test-suffix)
 (defvar ai-code-cli)
 
 ;;;###autoload
@@ -198,8 +198,8 @@ and runs it in a compilation buffer."
   (interactive)
   (let* ((prompt (ai-code-read-string "Prompt: "))
          (suffix-parts (delq nil (list ai-code-prompt-suffix
-                                       (when ai-code-test-after-code-change
-                                         ai-code-test-after-code-change-suffix))))
+                                       (when ai-code-auto-test-type
+                                         ai-code-auto-test-suffix))))
          (suffix (when (and ai-code-use-prompt-suffix suffix-parts)
                    (string-join suffix-parts ", ")))
          (prompt-with-suffix (if suffix

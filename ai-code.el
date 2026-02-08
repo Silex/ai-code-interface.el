@@ -37,7 +37,7 @@
 ;;   ;; Optional: Enable @ file completion in comments and AI sessions
 ;;   (ai-code-prompt-filepath-completion-mode 1)
 ;;   ;; Optional: Ask AI to run test after code changes, for a tighter build-test loop
-;;   (ai-code-test-after-code-change t)
+;;   (setq ai-code-auto-test-type 'test-after-change)
 ;;   ;; Optional: In the AI session buffer (Evil normal state), SPC triggers the prompt entry UI
 ;;   (with-eval-after-load 'evil (ai-code-backends-infra-evil-setup))
 ;;   (global-auto-revert-mode 1)
@@ -124,15 +124,50 @@ with a newline separator."
 ;;;###autoload
 (defcustom ai-code-test-after-code-change-suffix
   "If any program code changes, run unit-tests and follow up on the test-result (fix code if there is an error)."
-  "Prompt suffix to request running tests after code changes."
+  "User-provided prompt suffix for test-after-code-change."
   :type '(choice (const nil) string)
   :group 'ai-code)
 
 ;;;###autoload
-(defcustom ai-code-test-after-code-change nil
-  "When non-nil, append a test instruction to prompt suffixes where supported."
-  :type 'boolean
+(defvar ai-code-auto-test-suffix ai-code-test-after-code-change-suffix
+  "Default prompt suffix to request running tests after code changes.")
+
+(defun ai-code--test-after-code-change--resolve-tdd-suffix ()
+  "Return the TDD-style suffix for test-after-code-change prompts."
+  (let ((pattern (when (and (boundp 'ai-code--tdd-test-pattern-instruction)
+                            (stringp ai-code--tdd-test-pattern-instruction))
+                   ai-code--tdd-test-pattern-instruction)))
+    (concat "Follow TDD principles - write the failing test first, then implement the minimal code to make it pass. Only update test and source code. Run the tests and follow up with the test result (fix code if there is error)."
+            (or pattern ""))))
+
+(defun ai-code--test-after-code-change--set (symbol value)
+  "Set SYMBOL to VALUE and update related suffix behavior."
+  (set-default symbol value)
+  (set symbol value)
+  (pcase value
+    ('test-after-change
+     (setq ai-code-auto-test-suffix
+           ai-code-test-after-code-change-suffix))
+    ('tdd
+     (setq ai-code-auto-test-suffix
+           (ai-code--test-after-code-change--resolve-tdd-suffix)))
+    (_
+     (setq ai-code-auto-test-suffix nil))))
+
+(defun ai-code--apply-auto-test-type (value)
+  "Set `ai-code-auto-test-type` and refresh related suffix."
+  (setq ai-code-auto-test-type value)
+  (ai-code--test-after-code-change--set 'ai-code-auto-test-type value)
+  value)
+
+(defcustom ai-code-auto-test-type nil
+  "Select how prompts request tests after code changes."
+  :type '(choice (const :tag "Use test after code change prompt" test-after-change)
+                 (const :tag "Use TDD Red+Green prompt" tdd)
+                 (const :tag "Off" nil))
+  :set #'ai-code--test-after-code-change--set
   :group 'ai-code)
+
 
 ;;;###autoload
 (defcustom ai-code-cli "claude"
@@ -221,21 +256,30 @@ Otherwise switch to AI CLI buffer."
   :reader (lambda (_prompt _initial-input _history)
             (not ai-code-use-prompt-suffix)))
 
-;; DONE: similar to ai-code--infix-toggle-suffix, introduce infix for ai-code-test-after-code-change, and add it to menu
-
-(defclass ai-code--test-after-code-change-type (transient-lisp-variable)
-  ((variable :initform 'ai-code-test-after-code-change)
+(defclass ai-code--code-change-auto-test-type (transient-lisp-variable)
+  ((variable :initform 'ai-code-auto-test-type)
    (format :initform "%k %d %v")
    (reader :initform #'transient-lisp-variable--read-value))
-  "Toggle helper for `ai-code-test-after-code-change`.")
+  "Selection helper for `ai-code-auto-test-type`.")
 
-(transient-define-infix ai-code--infix-toggle-test-after-code-change ()
-  "Toggle `ai-code-test-after-code-change`."
-  :class 'ai-code--test-after-code-change-type
+(transient-define-infix ai-code--infix-select-code-change-auto-test ()
+  "Select `ai-code-auto-test-type` mode."
+  :class 'ai-code--code-change-auto-test-type
   :key "T"
-  :description "Test after code change:"
+  :description "Auto test type:"
   :reader (lambda (_prompt _initial-input _history)
-            (not ai-code-test-after-code-change)))
+            (let* ((choices '(("Use test after code change prompt" . test-after-change)
+                              ("Use TDD Red+Green prompt" . tdd)
+                              ("Off" . nil)))
+                   (choice (completing-read "Test after code change: "
+                                            (mapcar #'car choices)
+                                            nil t)))
+              (let ((value (cdr (assoc choice choices))))
+                (ai-code--apply-auto-test-type value)
+                (message "Auto test type set to %s; prompt suffix is now %s"
+                         (or value "off")
+                         (or ai-code-auto-test-suffix "cleared"))
+                value))))
 
 (defun ai-code--select-backend-description (&rest _)
   "Dynamic description for the Select Backend menu item.
@@ -269,7 +313,7 @@ Shows the current backend label to the right."
     ]
 
    ["AI Agile Development"
-    (ai-code--infix-toggle-test-after-code-change)
+    (ai-code--infix-select-code-change-auto-test)
     ("r" "Refactor Code"               ai-code-refactor-book-method)
     ("t" "Test Driven Development"     ai-code-tdd-cycle)
     ("v" "Pull or Review Code Change"  ai-code-pull-or-review-diff-file)
