@@ -118,6 +118,9 @@ Can be either `vterm' or `eat'."
 (defvar-local ai-code-backends-infra--idle-timer nil
   "Timer for detecting idle state (response completion).")
 
+(defvar ai-code-cli-args-history nil
+  "History list for CLI args prompts.")
+
 (defvar-local ai-code-backends-infra--last-activity-visible nil
   "Non-nil when the last terminal activity occurred in a visible window.")
 
@@ -480,7 +483,7 @@ PROMPT-LABEL is used in the minibuffer prompt."
   (let* ((default-args (mapconcat #'identity switches " "))
          (prompt (format "%s args: " (or prompt-label "CLI")))
          (prompt-args (when arg
-                        (read-string prompt default-args)))
+                        (read-string prompt default-args 'ai-code-cli-args-history)))
          (resolved-args (if arg
                             (split-string-shell-command prompt-args)
                           switches))
