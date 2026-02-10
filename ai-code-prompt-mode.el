@@ -21,8 +21,8 @@
 
 (declare-function yas-load-directory "yasnippet" (dir))
 (declare-function yas-minor-mode "yasnippet")
-(declare-function ai-code-cli-send-command "ai-code-interface" (command))
-(declare-function ai-code-cli-switch-to-buffer "ai-code-interface" ())
+(declare-function ai-code-cli-send-command "ai-code-backends" (command))
+(declare-function ai-code-cli-switch-to-buffer "ai-code-backends" ())
 (declare-function gptel-request "gptel" (prompt &rest args))
 (declare-function gptel-abort "gptel" (buffer))
 (declare-function ai-code--git-repo-recent-modified-files "ai-code-git" (base-dir limit))
@@ -470,8 +470,8 @@ Otherwise, return the current `default-directory`."
   "Generate a task filename from TASK-NAME.
 If `ai-code-task-use-gptel-filename` is non-nil, use GPTel to generate
 a smart filename. Otherwise, use cleaned-up task name directly.
-If TASK-NAME contains 'rdar://ID', use 'rdar_ID_' as prefix.
-Otherwise, use 'task_YYYYMMDD_' as prefix.
+If TASK-NAME contains `rdar://ID`, use `rdar_ID_` as prefix.
+Otherwise, use `task_YYYYMMDD_` as prefix.
 Returns a filename with .org suffix."
   (let* ((radar-id (when (string-match "rdar://\\([0-9]+\\)" task-name)
                      (match-string 1 task-name)))
