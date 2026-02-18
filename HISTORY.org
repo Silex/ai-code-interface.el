@@ -2,6 +2,9 @@
 * Release history
 
 ** Main branch change
+
+** 1.50
+- Feat: Add agent-shell as external backend
 - Fix: Always normalize git path
 - Chore: Replace prefix arg with completing-read menu in context action
 - Chore: Add option: ask-me, to ai-code-auto-test-type
