@@ -30,7 +30,6 @@
 (declare-function flycheck-error-message "flycheck")
 
 (defvar flycheck-current-errors)
-(defvar region-start-line)
 
 (defun ai-code--is-comment-line (line)
   "Check if LINE is a comment line based on current buffer's comment syntax.
