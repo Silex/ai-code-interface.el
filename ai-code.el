@@ -173,7 +173,7 @@ with a newline separator."
   '(("Run tests after code change" . test-after-change)
     ("Test driven development: Write test first" . tdd)
     ("Test driven development, follow up with refactoring" . tdd-with-refactoring)
-    ("Do not run tests" . no-test))
+    ("Do not write or run tests" . no-test))
   "Choices for resolving the auto test suffix when `ai-code-auto-test-type` is `ask-me`.")
 
 (defun ai-code--read-auto-test-type-choice ()
@@ -256,7 +256,7 @@ Return one of: `code-change`, `non-code-change`, or `unknown`."
     ('test-after-change ai-code-test-after-code-change-suffix)
     ('tdd (ai-code--test-after-code-change--resolve-tdd-suffix))
     ('tdd-with-refactoring (ai-code--test-after-code-change--resolve-tdd-with-refactoring-suffix))
-    ('no-test "Do not run any test.")
+    ('no-test "Do not write or run any test.")
     (_ nil)))
 
 (defun ai-code--resolve-auto-test-suffix-for-send (&optional prompt-text)

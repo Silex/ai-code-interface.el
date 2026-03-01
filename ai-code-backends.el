@@ -20,6 +20,7 @@
 (declare-function claude-code--term-send-string "claude-code" (backend string))
 (declare-function ai-code--validate-git-repository "ai-code-git" ())
 (declare-function ai-code--git-root "ai-code-file" (&optional dir))
+(declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
 
 (defvar ai-code--cli-start-fn #'ai-code--unsupported-start)
 (defvar ai-code--cli-resume-fn #'ai-code--unsupported-resume)
@@ -183,9 +184,13 @@ so the CLI itself handles the installation details."
   (let* ((url (read-string
                "Skills repo URL for Claude Code: "
                nil nil "https://github.com/obra/superpowers"))
-         (prompt (format
-                  "Install the skill from %s for this Claude Code CLI. Read the repository README to understand the installation instructions and follow them. Set up the skill files under the appropriate directory (e.g. ~/.claude/ or the project .claude/ directory) so they are available in future sessions."
-                  url)))
+         (default-prompt
+          (format
+           "Install the skill from %s for this Claude Code CLI. Read the repository README to understand the installation instructions and follow them. Set up the skill files under the appropriate directory (e.g. ~/.claude/ or the project .claude/ directory) so they are available in future sessions."
+           url))
+         (prompt (ai-code-read-string
+                  "Edit install-skills prompt for Claude Code: "
+                  default-prompt)))
     (ai-code-cli-send-command prompt)))
 
 ;;;###autoload
@@ -541,7 +546,13 @@ to read the repo README and install the skills."
   (let* ((url (read-string
                (format "Skills repo URL for %s: " label)
                nil nil "https://github.com/obra/superpowers"))
-         (prompt (format "Please read the README of %s and install/setup the skills described there for this CLI. Follow the installation instructions in the README." url)))
+         (default-prompt
+          (format
+           "Please read the README of %s and install/setup the skills described there for %s. Follow the installation instructions in the README."
+           url label))
+         (prompt (ai-code-read-string
+                  (format "Edit install-skills prompt for %s: " label)
+                  default-prompt)))
     (ai-code-cli-send-command prompt)))
 
 ;;;###autoload
