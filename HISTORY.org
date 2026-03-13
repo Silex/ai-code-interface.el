@@ -2,7 +2,9 @@
 * Release history
 
 ** Main branch change
+- Feat: Enable shared multiline terminal input in Emacs sessions and GitHub Copilot CLI compatibility
 - Feat: Add ECA (https://eca.dev/) as an external backend, contributed by davidwuchn
+- Chore: Add completion and open existing task files, also support scratch.org, for general task
 - Feat: Integrate with magit worktree feature
 - Feat: Modernize PR review tool
 
