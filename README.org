@@ -261,14 +261,23 @@ To expose your own Emacs function as a tool, use =ai-code-mcp-make-tool=.
 
 *** Harness Engineering Practice
 
-**** Build / Test Feedback Loop
+Harness engineering is about building a reliable loop around the model, so the AI does not stop at /make a change/ but continues into /verify the change and react to the result/. In this package, the clearest example is the auto test loop.
 
-Use the prompt suffix and TDD helpers to keep a tight build + test loop. This reduces context switching, shortens the time between a change and verified feedback, and lets the AI work more independently with less human-in-the-loop effort:
+Instead of manually telling the AI what to do after every edit, you can make test follow-up part of the workflow:
 
-- `ai-code-auto-test-type`: Selects how prompts request tests after code changes (test-after-change, TDD Red+Green, TDD Red+Green+Blue, off, or ask me).
-- `ai-code--tdd-red-green-stage`: Generates a single prompt for Red + Green with explicit test follow-up.
-- `ai-code--tdd-red-green-blue-stage`: Generates a single prompt for Red + Green + Blue (refactoring) with explicit test follow-up.
-- `ai-code-build-or-test-project`: Run the project build or test from the menu (`C-c a b`).
+- `ai-code-auto-test-type`: choose how code-change prompts should continue after the edit. You can ask the AI to run tests after the change, use TDD Red+Green, use Red+Green+Blue with refactoring, turn it off, or decide case by case with `ask-me`.
+- `ai-code-tdd-cycle`: run a guided TDD flow from the menu, including separate Red, Green, Blue stages or the combined one-prompt flows.
+- `ai-code-build-or-test-project`: run build/test explicitly from `C-c a b` when you want a direct verification step in the middle of the loop.
+- `ai-code-prompt-suffix`: add persistent project rules when needed, so repeated instructions such as response language, coding constraints, or test expectations do not have to be retyped in every prompt.
+
+The benefit is practical:
+
+- faster feedback after each AI code change
+- less context switching between prompting, testing, and follow-up fixes
+- more consistent AI behavior because verification is part of the workflow
+- easier to let the AI continue with the next step after a failed or passing test
+
+This is why features such as `ai-code-auto-test-type` and `ai-code-tdd-cycle` fit the idea of harness engineering: they turn testing and follow-up into part of the system, not an afterthought in each prompt.
 
 - Relevant article: [[https://martinfowler.com/articles/exploring-gen-ai/harness-engineering.html][Harness Engineering]]
 
