@@ -426,7 +426,7 @@ Shows the current backend label to the right."
   ;; ("o" "Open recent file (C-u: insert)" ai-code-git-repo-recent-modified-files)
   ("p" "Open prompt history file" ai-code-open-prompt-file)
   ("m" "Debug python MCP server" ai-code-debug-mcp)
-  ("N" "Toggle notifications" ai-code-notifications-toggle)
+  ;; ("N" "Toggle notifications" ai-code-notifications-toggle)
   ("d" "Debug Emacs runtime" ai-code-debug-emacs-runtime)
   ("h" "Help / Quick Start" ai-code-onboarding-open-quickstart))
 
