@@ -22,6 +22,11 @@
 (defvar ai-code-discussion-auto-follow-up-enabled)
 (defvar ai-code-discussion-auto-follow-up-suffix)
 (defvar ai-code-use-prompt-suffix)
+(defvar ai-code-backends-infra--session-terminal-backend nil
+  "Buffer-local terminal backend symbol for an AI session buffer, or nil.
+This is set by `ai-code-backends-infra.el' for terminal-managed sessions
+such as `vterm' and `eat'.  A nil value means the buffer is not managed by
+the terminal backend infrastructure.")
 
 (declare-function yas-load-directory "yasnippet" (dir))
 (declare-function yas-minor-mode "yasnippet")
@@ -36,6 +41,11 @@
 (declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
 (declare-function ai-code--get-clipboard-text "ai-code")
 (declare-function ai-code-current-backend-label "ai-code-backends" ())
+(declare-function ai-code-backends-infra--session-buffer-p "ai-code-backends-infra" (buffer))
+(declare-function ai-code-backends-infra--session-buffer-matches-directory-p "ai-code-backends-infra" (buffer directory))
+(declare-function ai-code-backends-infra--terminal-send-string "ai-code-backends-infra" (string))
+(declare-function ai-code-backends-infra--terminal-send-return "ai-code-backends-infra" ())
+(declare-function ai-code-backends-infra--display-buffer-in-side-window "ai-code-backends-infra" (buffer))
 
 (defcustom ai-code-prompt-preprocess-filepaths t
   "When non-nil, preprocess the prompt to replace file paths.
@@ -177,10 +187,70 @@ that should be recorded in the prompt history file."
   (ai-code--insert-backend-label-drawer)
   (ai-code--format-and-insert-prompt stored-prompt-text))
 
+(defun ai-code--find-visible-session-buffer ()
+  "Return a visible terminal-managed AI session buffer in the current frame."
+  (cl-some
+   (lambda (win)
+     (let ((buf (window-buffer win)))
+       (when (and (buffer-live-p buf)
+                  (ai-code-backends-infra--session-buffer-p buf)
+                  (buffer-local-value
+                   'ai-code-backends-infra--session-terminal-backend buf))
+         buf)))
+   (window-list nil 'no-minibuffer)))
+
+(defun ai-code--find-project-session-buffers ()
+  "Return terminal-managed AI session buffers associated with the current project."
+  (when-let ((git-root (ai-code--git-root)))
+    (cl-remove-if-not
+     (lambda (buf)
+       (and (ai-code-backends-infra--session-buffer-p buf)
+            (buffer-local-value
+             'ai-code-backends-infra--session-terminal-backend buf)
+            (ai-code-backends-infra--session-buffer-matches-directory-p buf git-root)))
+     (buffer-list))))
+
+(defun ai-code--prompt-choose-target-session ()
+  "Choose AI session buffer to send prompt to.
+Return session buffer for direct routing, or nil to use default backend dispatch."
+  (when-let ((visible-session (ai-code--find-visible-session-buffer)))
+    (let* ((project-sessions (ai-code--find-project-session-buffers))
+           (visible-is-project-session (memq visible-session project-sessions))
+           (competing-sessions
+            (cl-remove visible-session project-sessions)))
+      (cond
+       (visible-is-project-session nil)
+       ((null competing-sessions)
+        visible-session)
+       (t
+        (let* ((choice-alist (mapcar (lambda (buf)
+                                       (cons (buffer-name buf) buf))
+                                     (cons visible-session competing-sessions)))
+               (selection (completing-read
+                           "Multiple AI sessions available.  Send to: "
+                           (mapcar #'car choice-alist)
+                           nil t nil nil (buffer-name visible-session))))
+          (cdr (assoc selection choice-alist))))))))
+
+(defun ai-code--send-prompt-to-session-buffer (prompt buffer)
+  "Send PROMPT directly to session BUFFER and display it."
+  (with-current-buffer buffer
+    (ai-code-backends-infra--terminal-send-string prompt)
+    (sit-for 0.5)
+    (ai-code-backends-infra--terminal-send-return))
+  (if-let ((window (get-buffer-window buffer)))
+      (select-window window)
+    (ai-code-backends-infra--display-buffer-in-side-window buffer)))
+
 (defun ai-code--send-prompt (full-prompt)
-  "Send FULL-PROMPT to AI."
-  (ai-code-cli-send-command full-prompt)
-  (ai-code-cli-switch-to-buffer))
+  "Send FULL-PROMPT to AI.
+When a visible AI session buffer is detected in the current frame,
+send the prompt directly to it instead of going through the default
+backend dispatch."
+  (if-let ((target (ai-code--prompt-choose-target-session)))
+      (ai-code--send-prompt-to-session-buffer full-prompt target)
+    (ai-code-cli-send-command full-prompt)
+    (ai-code-cli-switch-to-buffer)))
 
 (defun ai-code--write-prompt-to-file-and-send (prompt-text)
   "Write PROMPT-TEXT to the AI prompt file."
