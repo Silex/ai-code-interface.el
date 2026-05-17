@@ -103,6 +103,7 @@
 
 (require 'ai-code-backends)
 (require 'ai-code-backends-infra)
+(require 'ai-code-session)
 (require 'ai-code-input)
 (require 'ai-code-prompt-mode)
 (require 'ai-code-agile)
@@ -405,13 +406,13 @@ Shows the current backend label to the right."
   ("R" "Resume AI CLI (C-u: args)" ai-code-cli-resume)
   ("z" "Switch to AI CLI (C-u: hide)" ai-code-cli-switch-to-buffer-or-hide)
   ("s" ai-code-select-backend :description ai-code--select-backend-description)
+  ("j" "Session dashboard" ai-code-session-dashboard)
   ;; DONE: similar to ai-code-select-backend, add ai-code-select-terminal, it will use ai-code-backends-infra-terminal-backend to select between different terminal emulators for AI sessions, such as vterm, eat, and ghostel.
   ("u" "Install / Upgrade AI CLI" ai-code-upgrade-backend)
   ("S" "(Un)Install skills for backend" ai-code-install-backend-skills)
   ("g" "Open backend config (eg. add mcp)" ai-code-open-backend-config)
   ("G" "Open backend repo agent file" ai-code-open-backend-agent-file)
-  ("l" ai-code-select-terminal :description ai-code--select-terminal-description)
-  ("|" "Apply prompt on file" ai-code-apply-prompt-on-current-file))
+  ("l" ai-code-select-terminal :description ai-code--select-terminal-description))
 
 (transient-define-group ai-code--menu-actions-with-context
   (ai-code--infix-toggle-suffix)
@@ -448,6 +449,7 @@ Shows the current backend label to the right."
   ("m" "Debug python MCP server" ai-code-debug-mcp)
   ;; ("N" "Toggle notifications" ai-code-notifications-toggle)
   ("d" "Debug Emacs runtime" ai-code-debug-emacs-runtime)
+  ("|" "Apply prompt on file" ai-code-apply-prompt-on-current-file)
   ("h" "Help / Quick Start" ai-code-onboarding-open-quickstart))
 
 (transient-define-prefix ai-code-menu-default ()
