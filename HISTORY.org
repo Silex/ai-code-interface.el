@@ -2,6 +2,9 @@
 * Release history
 
 ** Main branch change
+
+** 1.82
+- Feat: Quick prompts 
 - Feat: Add Antigravity CLI backend support
 - Fix: Simplify ai-code-plain-read-string to use read-string
 
