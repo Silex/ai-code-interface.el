@@ -84,6 +84,15 @@
    "Preserve existing behavior and avoid unrelated cleanup or refactors.")
   "Boundaries section for Flycheck fix briefs.")
 
+(defcustom ai-code-org-section-inline-max-lines 10
+  "Largest Org subtree, in lines, that is inlined into a generated prompt.
+Subtrees longer than this contribute a `path#Lstart-Lend' reference
+instead of their body, so the agent reads the range from the file.  A
+modified buffer always inlines, because the on-disk range would be
+stale."
+  :type 'integer
+  :group 'ai-code)
+
 (defun ai-code--code-change-brief--section (title body)
   "Return a code-change brief section named TITLE with BODY.
 When BODY is nil or blank, return nil."
@@ -224,6 +233,78 @@ returns that function's name.  Otherwise returns the result of
                                              (t current-func))))))))))
     resolved-func))
 
+(defun ai-code--org-section-candidates ()
+  "Return the Org sections enclosing point, innermost first.
+Each element is a plist with `:heading-line', `:heading-begin',
+`:heading-end', `:begin-line', `:end-line' and `:label'.  Sections whose
+entry is DONE are omitted.  Returns nil outside `org-mode' and when point
+precedes the first headline."
+  (when (derived-mode-p 'org-mode)
+    (save-excursion
+      (when (and (ignore-errors (org-back-to-heading t) t)
+                 (org-at-heading-p))
+        (let ((candidates nil)
+              (climbing t))
+          (while climbing
+            (let* ((heading-line (buffer-substring-no-properties
+                                  (line-beginning-position)
+                                  (line-end-position)))
+                   (begin-line (line-number-at-pos (point)))
+                   (end-line (save-excursion
+                               (org-end-of-subtree t)
+                               (line-number-at-pos (point)))))
+              (unless (or (org-entry-is-done-p)
+                          (string-match-p "^\\*+ DONE " heading-line))
+                (push (list :heading-line heading-line
+                            :heading-begin (line-beginning-position)
+                            :heading-end (line-end-position)
+                            :begin-line begin-line
+                            :end-line end-line
+                            :label (format "%s (L%d-L%d)"
+                                           heading-line begin-line end-line))
+                      candidates)))
+            (setq climbing (and (org-up-heading-safe) t)))
+          (nreverse candidates))))))
+
+(defun ai-code--org-select-section (candidates)
+  "Return the section plist chosen from CANDIDATES.
+Ask the user only when CANDIDATES holds more than one section; the
+innermost section is the default."
+  (cond
+   ((null candidates) nil)
+   ((null (cdr candidates)) (car candidates))
+   (t
+    (let* ((labels (mapcar (lambda (candidate) (plist-get candidate :label))
+                           candidates))
+           (choice (completing-read "Select Org section scope: "
+                                    labels nil t nil nil (car labels))))
+      (or (cl-find choice candidates
+                   :key (lambda (candidate) (plist-get candidate :label))
+                   :test #'string=)
+          (car candidates))))))
+
+(defun ai-code--org-section-body (begin-line end-line)
+  "Return the Org section body below BEGIN-LINE through END-LINE."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (goto-char (point-min))
+      (forward-line begin-line)
+      (let ((start (point)))
+        (goto-char (point-min))
+        (forward-line end-line)
+        (string-trim-right
+         (buffer-substring-no-properties start (max start (point))))))))
+
+(defun ai-code--org-section-reference (begin-line end-line)
+  "Return `path#Lstart-Lend' for BEGIN-LINE and END-LINE of the current file.
+Returns nil when the file has no Git-relative path."
+  (when buffer-file-name
+    (let ((relative (car (ai-code--get-git-relative-paths
+                          (list buffer-file-name)))))
+      (when relative
+        (format "%s#L%d-L%d" relative begin-line end-line)))))
+
 (defun ai-code--detect-todo-info (region-active)
   "Detect TODO comment information at cursor or in selected region.
 REGION-ACTIVE indicates whether a region is selected.
@@ -242,20 +323,15 @@ Returns (TEXT START-POS END-POS) if TODO found, nil otherwise."
                (list text
                      (if region-active (region-beginning) (line-beginning-position))
                      (if region-active (region-end) (line-end-position))))))))
+     ;; Existence check only: enumerating the enclosing sections here must not
+     ;; prompt, because `ai-code-implement-todo' asks again on the path below.
      (when (and (not region-active)
-                (derived-mode-p 'org-mode)
-                text)
-       (save-excursion
-         (when (and (org-at-heading-p)
-                    (ignore-errors (org-back-to-heading t)))
-           (let ((heading-line (buffer-substring-no-properties
-                                (line-beginning-position)
-                                (line-end-position))))
-             (when (and (not (org-entry-is-done-p))
-                        (not (string-match-p "^\\*+ DONE " heading-line)))
-               (list heading-line
-                     (line-beginning-position)
-                     (line-end-position))))))))))
+                (derived-mode-p 'org-mode))
+       (let ((section (car (ai-code--org-section-candidates))))
+         (when section
+           (list (plist-get section :heading-line)
+                 (plist-get section :heading-begin)
+                 (plist-get section :heading-end))))))))
 
 (defun ai-code--generate-prompt-label (clipboard-context region-active function-name)
   "Generate appropriate prompt label based on context.
@@ -474,31 +550,33 @@ Returns non-nil if handled and the caller should exit."
     t))
 
 (defun ai-code--implement-todo--get-org-todo-section-info ()
-  "Return current Org TODO section info as a plist, or nil.
-The plist contains `:heading-line', `:content', and `:line-number'."
-  (when (derived-mode-p 'org-mode)
-    (save-excursion
-      (when (and (org-at-heading-p)
-                 (ignore-errors (org-back-to-heading t)))
-        (let* ((line-number (line-number-at-pos (point)))
-               (heading-line (buffer-substring-no-properties
-                              (line-beginning-position)
-                              (line-end-position))))
-          (when (and (not (org-entry-is-done-p))
-                     (not (string-match-p "^\\*+ DONE " heading-line)))
-            (let* ((content-start (save-excursion
-                                    (forward-line 1)
-                                    (point)))
-                   (content-end (save-excursion
-                                  (org-end-of-subtree t t)
-                                  (point)))
-                   (content (string-trim-right
-                             (buffer-substring-no-properties
-                              content-start
-                              content-end))))
-              (list :heading-line heading-line
-                    :content content
-                    :line-number line-number))))))))
+  "Return the selected Org section info as a plist, or nil.
+The plist contains `:heading-line', `:content', `:inlined',
+`:line-number', `:end-line-number' and `:reference'.  Point may sit on a
+headline or anywhere inside its body; when the section has enclosing
+ancestors the user picks which one to use.  An active region suppresses
+Org scope so the region stays authoritative.  Sections longer than
+`ai-code-org-section-inline-max-lines' carry `:reference' in place of
+`:content', unless the buffer is modified or no reference is available."
+  (unless (region-active-p)
+    (let ((section (ai-code--org-select-section
+                    (ai-code--org-section-candidates))))
+      (when section
+        (let* ((begin-line (plist-get section :begin-line))
+               (end-line (plist-get section :end-line))
+               (reference (ai-code--org-section-reference begin-line end-line))
+               (inlined (or (null reference)
+                            (buffer-modified-p)
+                            (<= (1+ (- end-line begin-line))
+                                ai-code-org-section-inline-max-lines))))
+          (list :heading-line (plist-get section :heading-line)
+                :content (if inlined
+                             (ai-code--org-section-body begin-line end-line)
+                           "")
+                :inlined inlined
+                :line-number begin-line
+                :end-line-number end-line
+                :reference reference))))))
 
 (defun ai-code--implement-todo--format-org-section-block (org-todo-section-info)
   "Return formatted Org section text from ORG-TODO-SECTION-INFO."
@@ -591,6 +669,8 @@ ARG controls whether clipboard context is included."
           :function-name function-name
           :org-todo-section-info org-todo-section-info
           :org-line-number (plist-get org-todo-section-info :line-number)
+          :org-reference (plist-get org-todo-section-info :reference)
+          :org-inlined (plist-get org-todo-section-info :inlined)
           :org-section-block org-section-block
           :function-context function-context
           :region-text region-text
@@ -604,7 +684,10 @@ ARG controls whether clipboard context is included."
         (is-comment (plist-get context :is-comment)))
     (unless (or org-todo-section-info region-text is-comment)
       (user-error "Current line is not a TODO comment or Org headline and cannot proceed with `ai-code-implement-todo'.  Please select a TODO comment (not DONE), an Org headline (not DONE), a region of comments, or activate on a blank line"))
+    ;; In Org buffers a selected region is prose, not code comments, so the
+    ;; comment-block requirement does not apply there.
     (unless (or (not region-text)
+                (derived-mode-p 'org-mode)
                 (ai-code--is-comment-block region-text))
       (user-error "Selected region must be a comment block"))))
 
@@ -673,6 +756,8 @@ ARG controls whether clipboard context is included."
         (is-comment (plist-get context :is-comment))
         (org-todo-section-info (plist-get context :org-todo-section-info))
         (org-line-number (plist-get context :org-line-number))
+        (org-reference (plist-get context :org-reference))
+        (org-inlined (plist-get context :org-inlined))
         (org-section-block (plist-get context :org-section-block))
         (function-context (plist-get context :function-context))
         (region-text (plist-get context :region-text))
@@ -681,9 +766,14 @@ ARG controls whether clipboard context is included."
     (concat
      (cond
       (org-todo-section-info
-       (format "Org headline on line %d:\n%s"
-               org-line-number
-               org-section-block))
+       (concat
+        (format "Org headline on line %d%s:\n%s"
+                org-line-number
+                (if org-reference (format " (%s)" org-reference) "")
+                org-section-block)
+        (unless org-inlined
+          (format "\nRead %s in the file for the full section content."
+                  org-reference))))
       (region-text
        (format "%s\n%s"
                region-location-line
@@ -745,6 +835,14 @@ Optional DEFAULT-ACTION skips the `completing-read' prompt when non-nil."
            (initial-input
             (ai-code--implement-todo--initial-input context ask-question-p))
            (prompt (ai-code-read-string prompt-label initial-input))
+           (org-todo-section-info (plist-get context :org-todo-section-info))
+           (ai-code--org-summary-anchor
+            (when org-todo-section-info
+              (list :name (replace-regexp-in-string
+                           "\\`\\*+[[:space:]]*" ""
+                           (plist-get org-todo-section-info :heading-line))
+                    :end-line (plist-get org-todo-section-info
+                                         :end-line-number))))
            (final-prompt
             (ai-code--implement-todo--final-prompt
              prompt context action-intent)))
