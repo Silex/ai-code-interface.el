@@ -2,7 +2,8 @@
 * Release history
 
 ** Main branch change
-- Feat: use selected Magit hunks for agent explain, change, and test actions 
+- Feat: choose which enclosing Org section scopes a prompt, and reference oversized sections by line range instead of inlining them
+- Feat: use selected Magit hunks for agent explain, change, and test actions
 
 ** 1.96
 - Copy all marked Dired items in the @ context copy actions

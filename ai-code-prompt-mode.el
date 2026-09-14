@@ -706,6 +706,12 @@ GIT-ROOT-TRUENAME is the normalized Git root."
   (and (string-prefix-p "/" prompt-text)
        (not (string-match-p "[[:space:]]" prompt-text))))
 
+(defvar ai-code--org-summary-anchor nil
+  "Org section the result summary should be appended to, or nil.
+When non-nil, a plist with `:name' and `:end-line' describing the section
+chosen for the prompt being built.  `ai-code--insert-prompt' anchors the
+summary there instead of at the line under point.")
+
 (defun ai-code--insert-prompt (prompt-text)
   "Preprocess and insert PROMPT-TEXT into the AI prompt file.
 If PROMPT-TEXT is a command (starts with /), execute it directly instead."
@@ -714,14 +720,21 @@ If PROMPT-TEXT is a command (starts with /), execute it directly instead."
                             prompt-text)))
     (if (ai-code--direct-command-p processed-prompt)
         (ai-code--execute-command processed-prompt)
-      (let* ((append-summary-p (and (derived-mode-p 'org-mode)
+      (let* ((anchor ai-code--org-summary-anchor)
+             (append-summary-p (and (derived-mode-p 'org-mode)
                                     (ignore-errors (save-excursion (org-back-to-heading t) t))
                                     (y-or-n-p "Append result summary to current section? ")))
-             (final-prompt (if append-summary-p
-                               (concat processed-prompt
-                                       (format "\n\nAfter completing, append a concise result summary as a sub-heading at the end of the current section in file %s near line %d."
-                                               buffer-file-name (line-number-at-pos)))
-                             processed-prompt)))
+             (final-prompt
+              (if append-summary-p
+                  (concat processed-prompt
+                          (if anchor
+                              (format "\n\nAfter completing, append a concise result summary as a sub-heading at the end of section \"%s\" in file %s, after line %d."
+                                      (plist-get anchor :name)
+                                      buffer-file-name
+                                      (plist-get anchor :end-line))
+                            (format "\n\nAfter completing, append a concise result summary as a sub-heading at the end of the current section in file %s near line %d."
+                                    buffer-file-name (line-number-at-pos))))
+                processed-prompt)))
         (ai-code--write-prompt-to-file-and-send final-prompt)))))
 
 ;; Define the AI Prompt Mode (derived from org-mode)
