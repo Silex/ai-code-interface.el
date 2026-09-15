@@ -125,6 +125,7 @@
 (require 'ai-code-prompt-mode)
 (require 'ai-code-send)
 (require 'ai-code-agile)
+(require 'ai-code-grow)
 (require 'ai-code-git)
 (require 'ai-code-github)
 (require 'ai-code-change)
@@ -616,6 +617,7 @@ Shows the current backend label to the right."
   (ai-code--infix-select-code-change-auto-test)
   ("r" "Refactor Code" ai-code-refactor-book-method)
   ("t" "Test Driven Development" ai-code-tdd-cycle)
+  ("y" "Grow Next Step" ai-code-grow-next-step)
   ("v" "GitHub PR AI Action" ai-code-pull-or-review-diff-file)
   ;; DONE: Move ai-code-derive-architecture-guardrails ai-code-file.el. Add a new menu item: "Derive architecture document", bind to D. It let user choose from complet-reading: Derive Architecture Guardrails, and Derive DDD Context for Repo. No need to keep other two separate menu items
   ("A" "Derive architecture document" ai-code-derive-architecture-document)
