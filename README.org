@@ -102,8 +102,8 @@ Enable installation of packages from MELPA by adding an entry to package-archive
     ;; Optional: Disable numbered next steps for discussion prompts at send time
     ;; (enabled by default)
     ;; (setq ai-code-discussion-auto-follow-up-enabled nil)
-    ;; Optional: In AI session buffers, SPC in Evil normal state triggers the prompt-enter UI
-    (with-eval-after-load 'evil (ai-code-backends-infra-evil-setup))
+    ;; Optional: Show candidates as you type in task file, using company
+    ;; (add-hook 'ai-code-prompt-mode-hook #'ai-code-prompt-completion-setup)
     ;; Optional: Turn on auto-revert buffer, so that the AI code change automatically appears in the buffer
     (global-auto-revert-mode 1)
     (setq auto-revert-interval 1) ;; set to 1 second for faster update
@@ -152,6 +152,7 @@ falls back to Ghostel. See [[./docs/windows.org][Native Windows Support]] for se
 - `flycheck`: To enable the =Fix Flycheck errors in scope= action under =C-c a b= and the `ai-code-flycheck-fix-errors-in-scope` command.
 - `yasnippet`: For snippet support in the prompt file. A library of snippets is included.
   - (emacs built-in) abbrev + skeleton is also a good way to expand prompt. [[./etc/prompt_expand_with_abbrev_skeleton.el][example abbrev to solve / iterate leetcode problem with tdd (need to set ai-code-auto-test-type with tdd)]], [[./examples/leetcode][example problem resolved]]
+- `cape` / `company`: For inline completion of prompts you have written before, described under [[*Reusing Prompts You Already Wrote][Reusing Prompts You Already Wrote]]. Prompt completion itself needs neither package. `cape`, when installed, adds English dictionary words to the same candidate list with no configuration; `company` shows the candidates as you type once you opt in. Neither is a dependency, and neither is loaded when it is not installed.
 - `projectile`: For project root initialization.
 - `helm-gtags`: For tags creation and symbol navigation fallback from clickable session symbols.
 
@@ -197,6 +198,7 @@ appends the destination PNG path when invoking it:
 - *Productivity & Debugging Utilities*: Initialize project navigation assets (`.`), investigate exceptions (`e`), debug Emacs runtime issues (`d`), auto-fix Flycheck issues in scope (`f`), create or open task files (`k`), open prompt history (`p`), capture session notes straight into Org (`n`), search notes with AI (`/`), and dictate prompts with speech-to-text (`:`).
 - *Architecture Document Generation*: Derive practical architecture documents for the current repository with `C-c a A` (`ai-code-derive-architecture-document`). The command can generate architecture guardrails, a C4 PlantUML overview, a lightweight DDD context, or a test context document under `.ai.code.files/architecture/` so future AI coding sessions can reuse module boundaries, dependency rules, runtime flows, and validation expectations. See [[./docs/architecture/c4-overview.org][the C4 architecture overview for this repository]] for an example C4 diagram guide.
 - *Seamless Prompt Management*: Open the prompt file via `ai-code-open-prompt-file` (stored under `.ai.code.files/.ai.code.prompt.org` inside a Git repository), send regions with `ai-code-prompt-send-block`, and reuse prompt snippets via `yasnippet` to keep conversations organized. If the preferred prompt-history location is not writable, AI Code falls back to `~/.ai.code.files/.ai.code.prompt.org`; customize `ai-code-prompt-fallback-directory` to change that location or set it to nil to disable fallback. Prompt sending still proceeds with a warning when prompt history cannot be written.
+  - Prompts you typed by hand can be completed back inline with `ai-code-prompt-completion-capf`, indexed across every repository. See [[*Reusing Prompts You Already Wrote][Reusing Prompts You Already Wrote]].
 - *Interactive Chat & Context Tools*: Dedicated buffers hold long-running chats, automatically enriched with file paths, diffs, and history from Magit or Git commands for richer AI responses.
 - *AI-Assisted Bash Commands*: From Dired, shell, eshell, or vterm, run `C-c a !` and type natural-language commands prefixed with `:` (e.g., `:count lines of python code recursively`); the tool generates the shell command for review and executes it in a compile buffer.
 
@@ -218,6 +220,28 @@ appends the destination PNG path when invoking it:
 - *Speech to Text Input*: Press `C-c a`, then `:` (`ai-code-speech-to-text-input`). Speak your prompt, press `RET` to stop recording, then choose whether to insert the transcription into the current buffer, send it to the active AI coding session after editing it in `ai-code-read-string`, or copy it to the clipboard.
 - *Agent Handoff*: When switching AI backends or pausing work, press `C-c a H` to have the AI write a neutral handoff log into the task file. Later, in a new backend session, run `C-u C-c a H` to feed the entire handoff history back to the new agent.
 
+
+*** Reusing Prompts You Already Wrote
+
+Most of what you retype into a prompt is wording, not structure: "explain the current code", the handoff instructions you send at every backend switch. This completes those from the prompt history files AI Code already keeps, across every repository it knows about -- projectile's known projects, `ai-code-prompt-completion-roots`, the current directory and the fallback location, with remote (Tramp) roots skipped so completion never opens a connection. Point `ai-code-prompt-completion-files` (nil by default) at files of your own -- a prompt library you keep by hand, a diary, any Org file whose wording you reuse. Setting `ai-code-prompt-completion-use-org-roam` adds the notes org-roam tracks the same way -- off by default, since a whole zettelkasten contributes note sections rather than prompts. In both, every headline offers two prompts however deep it sits, its own text and the text written under it, and whatever stands before the first headline -- the whole of a file written without any -- is split on blank lines. Datetree headlines, tags, statistics cookies and link wrappers are markup rather than wording and drop out, as does a heading of a word or two, quicker typed than picked from a popup. Neither history filter below applies there: you wrote those files, so they are offered as written. A large diary is worth measuring before you point at it -- 10MB of Org indexes in about a second and contributes on the order of 10^5 candidates.
+
+It needs no configuration: opening a prompt file installs the capf, so `completion-at-point` (=M-TAB=) offers your earlier prompts right away, and if =cape= is installed its `cape-dict` words join the same candidate list. Only the popup front-end is left to you:
+
+#+begin_src emacs-lisp
+;; Show candidates as you type, using company
+(add-hook 'ai-code-prompt-mode-hook #'ai-code-prompt-completion-setup)
+#+end_src
+
+Both =cape= and =company= are optional: neither is a dependency, and neither is loaded when it is not installed. Set `ai-code-prompt-completion-enable-company` to nil when a front-end such as corfu shows the candidates instead, or `(remove-hook 'ai-code-prompt-mode-hook #'ai-code-prompt-completion--enable)` to opt out completely. If your own config already merges capfs with cape, add `ai-code-prompt-completion-capf` to that list rather than relying on the default: the first capf at a given hook depth answers, and yours is added first.
+
+Candidates are the prompts you wrote by hand, ranked by how often you wrote them, shown as a truncated first line and inserted whole. A prompt is recalled from any word of three characters or more in its first line, not only the opening one, and choosing it rewrites the line from the start when what you already typed there opens that same prompt -- so a half-finished `- Go ahead with the suggested refac` completes in place, while a `TODO: ` of your own stays put. Matching still begins at a word: Emacs only offers a non-exclusive capf once plain prefix completion could succeed, so `factor` reaches `refactoring` only if your own `completion-styles` include `flex`. Prompts AI Code generated itself are left out by prefix (`ai-code-prompt-completion-template-prefixes`), and anything longer than `ai-code-prompt-completion-max-lines` is dropped as a one-off paste. The index is cached for the session; `ai-code-prompt-completion-refresh` rebuilds it.
+
+One caveat on the dictionary half: `cape-dict` reads `/usr/share/dict/words`, which on macOS is Webster's 1934 edition. For a modern list, generate one and point `cape-dict-file` at it:
+
+#+begin_src sh
+aspell -d en dump master | aspell -l en expand | tr ' ' '\n' | sort -u \
+  > ~/.emacs.d/dict-en.txt
+#+end_src
 
 *** Context Engineering
 
