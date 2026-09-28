@@ -589,7 +589,7 @@ Shows the current backend label to the right."
   (":" "Speech to text input" ai-code-speech-to-text-input)
   )
 
-;;;###autoload
+;;;###autoload (autoload 'ai-code-insert-menu "ai-code" nil t)
 (transient-define-prefix ai-code-insert-menu ()
   "Insert files and editor selections into an AI Code session or viewport."
   ["Insert"
