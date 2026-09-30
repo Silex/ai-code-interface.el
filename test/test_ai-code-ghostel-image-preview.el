@@ -53,6 +53,102 @@
         (when was-bound
           (set 'ghostel--cursor-char-pos saved))))))
 
+(ert-deftest test-ai-code-ghostel-image-preview--completion-menu-not-allowed ()
+  "File names completed below the input row should not be previewed."
+  (with-temp-buffer
+    (insert "Saved shot.png\n"
+            "❯ @sh\n"
+            "  shot.png\n"
+            "  sheet.png\n")
+    (goto-char (point-min))
+    (forward-line 1)
+    (setq-local ghostel--cursor-char-pos (line-end-position))
+    (cl-flet ((allowed-p (text)
+                (goto-char (point-min))
+                (search-forward text)
+                (ai-code-ghostel-image-preview--position-allowed-p
+                 (match-beginning 0) (match-end 0))))
+      (should (allowed-p "shot.png"))
+      (should-not (allowed-p "@sh"))
+      (should-not (allowed-p "  shot.png"))
+      (should-not (allowed-p "sheet.png")))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--toggle-disables-and-enables-sessions ()
+  "Toggling should clear previews in Ghostel sessions, then re-enable them."
+  (let ((session (generate-new-buffer " *ai-code-toggle-session*"))
+        (other (generate-new-buffer " *ai-code-toggle-other*"))
+        (ai-code-session-link-ghostel-image-preview-enabled t)
+        enabled disabled)
+    (unwind-protect
+        (cl-letf (((symbol-function 'display-images-p)
+                   (lambda (&optional _display) t))
+                  ((symbol-function 'ai-code-ghostel-image-preview-enable)
+                   (lambda ()
+                     (push (current-buffer) enabled)
+                     (setq-local ai-code-ghostel-image-preview-mode t)))
+                  ((symbol-function 'ai-code-ghostel-image-preview-disable)
+                   (lambda ()
+                     (push (current-buffer) disabled)
+                     (setq-local ai-code-ghostel-image-preview-mode nil)))
+                  ((symbol-function 'message) #'ignore))
+          (dolist (buffer (list session other))
+            (with-current-buffer buffer
+              (insert "Saved shot.png\n")
+              (overlay-put (make-overlay (point-min) (point-max))
+                           'ai-code-session-image-preview t)))
+          (with-current-buffer session
+            (setq-local ai-code-backends-infra--session-terminal-backend
+                        'ghostel)
+            (setq-local ai-code-ghostel-image-preview-mode t))
+          (ai-code-toggle-image-preview)
+          (should-not ai-code-session-link-ghostel-image-preview-enabled)
+          (should (equal disabled (list session)))
+          (with-current-buffer session
+            (should-not (overlays-in (point-min) (point-max))))
+          (with-current-buffer other
+            (should (overlays-in (point-min) (point-max))))
+          (ai-code-toggle-image-preview)
+          (should ai-code-session-link-ghostel-image-preview-enabled)
+          (should (equal enabled (list session))))
+      (kill-buffer session)
+      (kill-buffer other))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--toggle-keeps-captured-sources ()
+  "Toggling off and on should keep images captured from deleted files."
+  (let ((session (generate-new-buffer " *ai-code-toggle-session*"))
+        (ai-code-session-link-ghostel-image-preview-enabled t)
+        (sources (list (list :file "/tmp/shot.png"
+                             :data "PNG"
+                             :signature '(3 . 0)))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'display-images-p)
+                   (lambda (&optional _display) t))
+                  ((symbol-function 'ai-code-ghostel-image-preview-enable)
+                   (lambda ()
+                     (setq ai-code-ghostel-image-preview--captured-sources nil)
+                     (setq-local ai-code-ghostel-image-preview-mode t)))
+                  ((symbol-function 'ai-code-ghostel-image-preview-disable)
+                   (lambda ()
+                     (setq ai-code-ghostel-image-preview--captured-sources nil)
+                     (setq-local ai-code-ghostel-image-preview-mode nil)))
+                  ((symbol-function 'message) #'ignore))
+          (with-current-buffer session
+            (setq-local ai-code-backends-infra--session-terminal-backend
+                        'ghostel)
+            (setq-local ai-code-ghostel-image-preview-mode t)
+            (setq ai-code-ghostel-image-preview--captured-sources sources))
+          (ai-code-toggle-image-preview)
+          (with-current-buffer session
+            (should-not ai-code-ghostel-image-preview-mode)
+            (should (equal ai-code-ghostel-image-preview--captured-sources
+                           sources)))
+          (ai-code-toggle-image-preview)
+          (with-current-buffer session
+            (should ai-code-ghostel-image-preview-mode)
+            (should (equal ai-code-ghostel-image-preview--captured-sources
+                           sources))))
+      (kill-buffer session))))
+
 (ert-deftest test-ai-code-ghostel-image-preview--recovery-scans-images-only ()
   "Visible recovery must not run the general session-link regex pipeline."
   (let (generic-called strict-called)

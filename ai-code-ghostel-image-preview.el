@@ -270,20 +270,23 @@ ordinary pixel-scroll command."
              ai-code-ghostel-image-preview--user-scrolled-windows))
       (memq window ai-code-ghostel-image-preview--user-scrolled-windows))))
 
-(defun ai-code-ghostel-image-preview--input-row-bounds ()
-  "Return the bounds of Ghostel's live cursor row, or nil."
+(defun ai-code-ghostel-image-preview--input-row-start ()
+  "Return the start of Ghostel's live cursor row, or nil."
   (when (and (boundp 'ghostel--cursor-char-pos)
              (integer-or-marker-p ghostel--cursor-char-pos))
     (save-excursion
       (goto-char (max (point-min)
                       (min (point-max) ghostel--cursor-char-pos)))
-      (cons (line-beginning-position) (line-end-position)))))
+      (line-beginning-position))))
 
 (defun ai-code-ghostel-image-preview--position-allowed-p (start _end)
-  "Return non-nil when an image preview may begin at START."
-  (if-let* ((input-bounds
-             (ai-code-ghostel-image-preview--input-row-bounds)))
-      (not (<= (car input-bounds) start (cdr input-bounds)))
+  "Return non-nil when an image preview may begin at START.
+Rows from the live cursor row down hold the TUI's input box, its file
+completion menu, and its status lines, so file names there are not
+previewed."
+  (if-let* ((input-start
+             (ai-code-ghostel-image-preview--input-row-start)))
+      (< start input-start)
     t))
 
 (defun ai-code-ghostel-image-preview--overlays-in-region (start end)
@@ -932,6 +935,34 @@ Optional DELAYS overrides the default scan delays."
         ai-code-ghostel-image-preview--captured-sources nil
         ai-code-ghostel-image-preview--output-tail "")
   (ai-code-ghostel-image-preview-mode -1))
+
+;;;###autoload
+(defun ai-code-toggle-image-preview ()
+  "Toggle local image previews in all Ghostel AI session buffers."
+  (interactive)
+  (setq ai-code-session-link-ghostel-image-preview-enabled
+        (not ai-code-session-link-ghostel-image-preview-enabled))
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (ai-code-session-link--ghostel-session-p)
+        (let ((sources ai-code-ghostel-image-preview--captured-sources))
+          (unwind-protect
+              (cond
+               ((not ai-code-session-link-ghostel-image-preview-enabled)
+                (when ai-code-ghostel-image-preview-mode
+                  (ai-code-ghostel-image-preview-disable))
+                (save-restriction
+                  (widen)
+                  (ai-code-session-link--delete-image-preview-overlays
+                   (point-min) (point-max))))
+               ((and (not ai-code-ghostel-image-preview-mode)
+                     (ai-code-session-link--image-preview-enabled-p))
+                (ai-code-ghostel-image-preview-enable)))
+            (setq ai-code-ghostel-image-preview--captured-sources
+                  sources))))))
+  (message "AI Code image previews %s"
+           (if ai-code-session-link-ghostel-image-preview-enabled
+               "enabled" "disabled")))
 
 (defun ai-code-ghostel-image-preview-unload-function ()
   "Remove global integration installed by this module."
