@@ -267,7 +267,13 @@
                   ghostel-inhibit-anchor-functions))
     (should (memq #'ai-code-ghostel-image-preview--window-scroll
                   window-scroll-functions))
+    (should (eq mwheel-scroll-up-function
+                #'ai-code-ghostel-image-preview--wheel-scroll-up))
+    (should (eq mwheel-scroll-down-function
+                #'ai-code-ghostel-image-preview--wheel-scroll-down))
     (ai-code-ghostel-image-preview-disable)
+    (should-not (local-variable-p 'mwheel-scroll-up-function))
+    (should-not (local-variable-p 'mwheel-scroll-down-function))
     (should-not (bound-and-true-p ai-code-ghostel-image-preview-mode))
     (should-not ai-code-session-link-image-preview-position-function)
     (should-not ai-code-session-link-image-preview-source-function)
@@ -596,6 +602,208 @@
       (ai-code-ghostel-image-preview-scroll 'kitty-wheel-event)
       (should (eq pixel-event 'kitty-wheel-event))
       (should-not ultra-called))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--mode-map-remaps-line-scroll ()
+  "Line-scroll commands, including evil's, should be remapped in sessions."
+  (dolist (pair
+           '((scroll-up-line
+              . ai-code-ghostel-image-preview-scroll-line-down)
+             (evil-scroll-line-down
+              . ai-code-ghostel-image-preview-scroll-line-down)
+             (scroll-down-line
+              . ai-code-ghostel-image-preview-scroll-line-up)
+             (evil-scroll-line-up
+              . ai-code-ghostel-image-preview-scroll-line-up)))
+    (should (eq (lookup-key ai-code-ghostel-image-preview-mode-map
+                            (vector 'remap (car pair)))
+                (cdr pair)))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--line-scroll-uses-pixels-over-preview ()
+  "Line scrolling over a visible preview should move by line-height pixels."
+  (let (down up noted scheduled original-called)
+    (cl-letf (((symbol-function
+                'ai-code-ghostel-image-preview--window-has-preview-p)
+               (lambda (_window) t))
+              ((symbol-function
+                'ai-code-ghostel-image-preview--note-user-scroll)
+               (lambda (window) (setq noted window)))
+              ((symbol-function 'default-line-height) (lambda () 18))
+              ((symbol-function 'pixel-scroll-precision-scroll-down)
+               (lambda (delta) (push delta down)))
+              ((symbol-function 'pixel-scroll-precision-scroll-up)
+               (lambda (delta) (push delta up)))
+              ((symbol-function 'scroll-up-line)
+               (lambda (&rest _args) (setq original-called t)))
+              ((symbol-function 'scroll-down-line)
+               (lambda (&rest _args) (setq original-called t)))
+              ((symbol-function
+                'ai-code-ghostel-image-preview-schedule-visible-linkify)
+               (lambda (&rest _args) (setq scheduled t))))
+      (let ((this-original-command 'scroll-up-line))
+        (ai-code-ghostel-image-preview-scroll-line-down 3))
+      (let ((this-original-command 'scroll-down-line))
+        (ai-code-ghostel-image-preview-scroll-line-up 2))
+      (should (equal down '(54)))
+      (should (equal up '(36)))
+      (should (eq noted (selected-window)))
+      (should scheduled)
+      (should-not original-called))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--line-scroll-runs-remapped-command ()
+  "Without a visible preview, line scrolling should keep the remapped command."
+  (let (calls pixel-called)
+    (cl-letf (((symbol-function
+                'ai-code-ghostel-image-preview--window-has-preview-p)
+               (lambda (_window) nil))
+              ((symbol-function 'pixel-scroll-precision-scroll-down)
+               (lambda (_delta) (setq pixel-called t)))
+              ((symbol-function 'pixel-scroll-precision-scroll-up)
+               (lambda (_delta) (setq pixel-called t)))
+              ((symbol-function 'evil-scroll-line-down)
+               (lambda (count) (push (list 'evil-down count) calls)))
+              ((symbol-function 'evil-scroll-line-up)
+               (lambda (count) (push (list 'evil-up count) calls)))
+              ((symbol-function 'scroll-up-line)
+               (lambda (&optional count) (push (list 'up-line count) calls)))
+              ((symbol-function 'scroll-down-line)
+               (lambda (&optional count)
+                 (push (list 'down-line count) calls))))
+      (let ((this-original-command 'evil-scroll-line-down))
+        (ai-code-ghostel-image-preview-scroll-line-down 2))
+      (let ((this-original-command 'evil-scroll-line-up))
+        (ai-code-ghostel-image-preview-scroll-line-up 4))
+      ;; An unrelated outer command must never be re-run as the fallback.
+      (let ((this-original-command 'kill-line))
+        (ai-code-ghostel-image-preview-scroll-line-down 1)
+        (ai-code-ghostel-image-preview-scroll-line-up 1))
+      (should (equal (nreverse calls)
+                     '((evil-down 2) (evil-up 4)
+                       (up-line 1) (down-line 1))))
+      (should-not pixel-called))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--line-scroll-clears-scrollback-at-live-end ()
+  "Keyboard scrolling should resume following output once it reaches the end."
+  (let (handled cleared)
+    (cl-letf (((symbol-function
+                'ai-code-ghostel-image-preview--scroll-lines)
+               (lambda (_lines)
+                 (if (eq handled 'error)
+                     (signal 'end-of-buffer nil)
+                   handled)))
+              ((symbol-function
+                'ai-code-ghostel-image-preview--clear-user-scroll-at-live-end)
+               (lambda (window) (push window cleared)))
+              ((symbol-function 'scroll-up-line) #'ignore)
+              ((symbol-function 'scroll-down-line) #'ignore))
+      (dolist (state '(t nil))
+        (setq handled state)
+        (ai-code-ghostel-image-preview-scroll-line-down 1)
+        (ai-code-ghostel-image-preview-scroll-line-up 1))
+      ;; Reaching the end of the buffer is when the window meets live output.
+      (setq handled 'error)
+      (should-error (ai-code-ghostel-image-preview-scroll-line-down 1)
+                    :type 'end-of-buffer)
+      (should (equal cleared (make-list 5 (selected-window)))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--wheel-functions-use-pixels-over-preview ()
+  "Plain `mwheel-scroll' should scroll by pixels only over a local preview."
+  (let (preview pixels global-calls)
+    (cl-letf (((symbol-function
+                'ai-code-ghostel-image-preview--window-has-preview-p)
+               (lambda (_window) preview))
+              ((symbol-function
+                'ai-code-ghostel-image-preview--note-user-scroll)
+               #'ignore)
+              ((symbol-function
+                'ai-code-ghostel-image-preview-schedule-visible-linkify)
+               #'ignore)
+              ((symbol-function
+                'ai-code-ghostel-image-preview--scroll-pixels)
+               (lambda (delta) (push delta pixels)))
+              ((symbol-function 'default-line-height) (lambda () 18)))
+      (with-temp-buffer
+        (let ((mwheel-scroll-up-function
+               (lambda (&optional arg) (push (list 'up arg) global-calls)))
+              (mwheel-scroll-down-function
+               (lambda (&optional arg) (push (list 'down arg) global-calls))))
+          (setq preview t)
+          (ai-code-ghostel-image-preview--wheel-scroll-up 3)
+          (ai-code-ghostel-image-preview--wheel-scroll-down 2)
+          ;; A page scroll has no line count and keeps the global behavior.
+          (ai-code-ghostel-image-preview--wheel-scroll-up nil)
+          (setq preview nil)
+          (ai-code-ghostel-image-preview--wheel-scroll-down 1))))
+    (should (equal (nreverse pixels) '(54 -36)))
+    (should (equal (nreverse global-calls) '((up nil) (down 1))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--pixel-scroll-keeps-rows-whole ()
+  "Pixel line scrolling should keep text rows whole around image previews."
+  (let (start vscroll at-preview scroll-result log)
+    (cl-flet ((run (pixels state result)
+                (setq start (nth 0 state)
+                      vscroll (nth 1 state)
+                      at-preview (nth 2 state)
+                      scroll-result result
+                      log nil)
+                (ai-code-ghostel-image-preview--scroll-pixels pixels)
+                (nreverse log)))
+      (cl-letf (((symbol-function 'window-start)
+                 (lambda (&optional _window) start))
+                ((symbol-function 'window-vscroll)
+                 (lambda (&optional _window _pixels) vscroll))
+                ((symbol-function 'default-line-height) (lambda () 18))
+                ((symbol-function
+                  'ai-code-ghostel-image-preview--preview-at-window-start-p)
+                 (lambda (_window) at-preview))
+                ((symbol-function
+                  'ai-code-ghostel-image-preview--set-window-vscroll)
+                 (lambda (_window value) (push (list 'vscroll value) log)))
+                ((symbol-function
+                  'ai-code-ghostel-image-preview--show-link-row)
+                 (lambda (_window)
+                   (push '(link-row) log)
+                   (setq start 15 vscroll 0 at-preview nil)))
+                ((symbol-function 'pixel-scroll-precision-scroll-down)
+                 (lambda (delta)
+                   (push (list 'down delta) log)
+                   (apply (lambda (s v p) (setq start s vscroll v at-preview p))
+                          scroll-result)))
+                ((symbol-function 'pixel-scroll-precision-scroll-up)
+                 (lambda (delta)
+                   (push (list 'up delta) log)
+                   (apply (lambda (s v p) (setq start s vscroll v at-preview p))
+                          scroll-result))))
+        ;; Leaving an image for a text row that is 12px into view.
+        (should (equal (run 18 '(10 396 t) '(20 12 nil))
+                       '((down 18) (vscroll 0))))
+        ;; Reaching a preview skips the empty row drawn before its image.
+        (should (equal (run 18 '(10 0 nil) '(20 0 t))
+                       '((down 18) (vscroll 18))))
+        ;; A preview may stay partly scrolled at the window start.
+        (should (equal (run 18 '(20 18 t) '(20 36 t))
+                       '((down 18))))
+        (should (equal (run -18 '(20 100 t) '(20 82 t))
+                       '((up 18))))
+        ;; From the top of a preview, step onto its link row first.
+        (should (equal (run -36 '(20 18 t) '(10 0 nil))
+                       '((link-row) (up 18))))
+        ;; Scrolling up to a preview's empty leading row shows its link row.
+        (should (equal (run -18 '(20 30 t) '(20 12 t))
+                       '((up 18) (link-row))))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--line-scroll-declares-evil-properties ()
+  "Remapped evil scrolls should not replace the last change for `.'."
+  (let (declared)
+    (cl-letf (((symbol-function 'evil-add-command-properties)
+               (lambda (command &rest properties)
+                 (push (cons command properties) declared))))
+      (ai-code-ghostel-image-preview--declare-evil-commands))
+    (should
+     (equal (sort (mapcar #'car declared) #'string<)
+            '(ai-code-ghostel-image-preview-scroll-line-down
+              ai-code-ghostel-image-preview-scroll-line-up)))
+    (dolist (entry declared)
+      (should (equal (cdr entry) '(:repeat nil :keep-visual t))))))
 
 (ert-deftest test-ai-code-ghostel-image-preview--anchor-veto-follows-intent ()
   "Only explicit image scrollback should veto automatic Ghostel anchoring."
