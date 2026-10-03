@@ -968,7 +968,11 @@ Return non-nil when EVENT was handled here.  Both `ultra-scroll' and
 `pixel-scroll-precision' can fail to cross a preview's lower edge
 upwards, and then leave the window on the row below the preview."
   (let* ((delta-pair (and (consp event) (nth 4 event)))
-         (delta (and (consp delta-pair) (cdr delta-pair))))
+         ;; emacs-mac has no pixel delta pair: it reports trackpad pixels
+         ;; in a property list in place of the line count.
+         (plist (and (consp event) (nth 3 event)))
+         (delta (cond ((consp delta-pair) (cdr delta-pair))
+                      ((consp plist) (plist-get plist :scrolling-delta-y)))))
     (when (and (numberp delta)
                (> delta 0)
                (ai-code-ghostel-image-preview--preview-above

@@ -943,6 +943,30 @@ START and VSCROLL variables, and the line height is 18 pixels."
         (should (equal pixels '(-20)))
         (should (equal engine '(ultra ultra)))))))
 
+(ert-deftest test-ai-code-ghostel-image-preview--wheel-enters-preview-reads-emacs-mac-delta ()
+  "An emacs-mac trackpad event should enter a preview from below too."
+  (let ((window (selected-window))
+        pixels)
+    (cl-letf (((symbol-function 'ai-code-ghostel-image-preview--preview-above)
+               (lambda (_window reach) (cons 'overlay reach)))
+              ((symbol-function 'ai-code-ghostel-image-preview--scroll-pixels)
+               (lambda (delta) (push delta pixels))))
+      (should (ai-code-ghostel-image-preview--scroll-up-onto-preview
+               '(wheel-up nil 1 (:scrolling-delta-y 20.4 :phase changed))
+               window))
+      (should (equal pixels '(-20)))
+      ;; Scrolling down is left to the scroll engines.
+      (should-not (ai-code-ghostel-image-preview--scroll-up-onto-preview
+                   '(wheel-down nil 1 (:scrolling-delta-y -20.4))
+                   window))
+      ;; A wheeled mouse reports lines, not pixels.
+      (should-not (ai-code-ghostel-image-preview--scroll-up-onto-preview
+                   '(wheel-up nil 1 (:delta-y 1.0))
+                   window))
+      (should-not (ai-code-ghostel-image-preview--scroll-up-onto-preview
+                   'wheel-event window))
+      (should (equal pixels '(-20))))))
+
 (ert-deftest test-ai-code-ghostel-image-preview--line-scroll-reaches-preview-above ()
   "Line scrolling up should use pixels for a preview it is about to reveal."
   (let (above pixels)
