@@ -791,6 +791,226 @@
         (should (equal (run -18 '(20 30 t) '(20 12 t))
                        '((up 18) (link-row))))))))
 
+(defmacro test-ai-code-ghostel-image-preview--with-preview-rows (&rest body)
+  "Run BODY in a window showing five rows, with a preview after row 1.
+BODY sees WINDOW, the preview OVERLAY, and ROW, a function returning the
+start of a row.  `window-start' and `window-vscroll' answer from the
+START and VSCROLL variables, and the line height is 18 pixels."
+  (declare (indent 0))
+  `(save-window-excursion
+     (with-temp-buffer
+       (insert "row 0\nrow 1 image.png\nrow 2\nrow 3\nrow 4\n")
+       (let* ((window (selected-window))
+              (row (lambda (n)
+                     (save-excursion
+                       (goto-char (point-min))
+                       (forward-line n)
+                       (point))))
+              (overlay (make-overlay (1- (funcall row 2)) (funcall row 2)))
+              (start (funcall row 2))
+              (vscroll 0))
+         (overlay-put overlay 'ai-code-session-image-preview t)
+         (set-window-buffer window (current-buffer))
+         (cl-letf (((symbol-function 'window-start)
+                    (lambda (&optional _window) start))
+                   ((symbol-function 'window-vscroll)
+                    (lambda (&optional _window _pixels) vscroll))
+                   ((symbol-function 'default-line-height) (lambda () 18)))
+           ,@body)))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--preview-above-needs-reach ()
+  "An upward scroll should enter a preview only past the preview's lower edge."
+  (test-ai-code-ghostel-image-preview--with-preview-rows
+    (cl-flet ((above (pixels)
+                (ai-code-ghostel-image-preview--preview-above window pixels)))
+      ;; Directly below the preview, any upward scroll enters it.
+      (should (equal (above 1) (cons overlay 0)))
+      (should (equal (above 18) (cons overlay 0)))
+      ;; The hidden part of the first row comes into view first.
+      (setq vscroll 10)
+      (should-not (above 10))
+      (should (equal (above 11) (cons overlay 0)))
+      ;; One row below, the scroll must exceed that row.
+      (setq start (funcall row 3) vscroll 0)
+      (should-not (above 18))
+      (should (equal (above 19) (cons overlay 1)))
+      (setq start (funcall row 4))
+      (should-not (above 36))
+      (should (equal (above 54) (cons overlay 2)))
+      ;; A window already on the preview has nothing to enter.
+      (setq start (overlay-start overlay))
+      (should-not (above 54))
+      ;; Nor has a window above it.
+      (setq start (funcall row 1))
+      (should-not (above 54)))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--pixel-scroll-enters-preview-from-below ()
+  "Scrolling up from below a preview should step onto it without measuring."
+  (test-ai-code-ghostel-image-preview--with-preview-rows
+    (let (log)
+      (cl-letf (((symbol-function
+                  'ai-code-ghostel-image-preview--preview-pixel-height)
+                 (lambda (_overlay _window) 420))
+                ((symbol-function 'set-window-start)
+                 (lambda (_window position &optional _noforce)
+                   (push (list 'start position) log)
+                   (setq start position)))
+                ((symbol-function
+                  'ai-code-ghostel-image-preview--set-window-vscroll)
+                 (lambda (_window value)
+                   (push (list 'vscroll value) log)
+                   (setq vscroll value)))
+                ((symbol-function 'pixel-scroll-precision-scroll-up)
+                 (lambda (delta) (push (list 'up delta) log)))
+                ((symbol-function
+                  'ai-code-ghostel-image-preview--keep-point-visible)
+                 #'ignore))
+        (cl-flet ((run (pixels from-row from-vscroll)
+                    (setq start (funcall row from-row)
+                          vscroll from-vscroll
+                          log nil)
+                    (ai-code-ghostel-image-preview--scroll-pixels pixels)
+                    (nreverse log)))
+          (let ((link-row (funcall row 1)))
+            ;; Directly below, the empty row drawn for the preview's
+            ;; trailing newline already counts as one line of it.
+            (should (equal (run -18 2 0)
+                           `((start ,link-row) (vscroll 384))))
+            (should (equal (run -18 2 10)
+                           `((start ,link-row) (vscroll 394))))
+            ;; From further down, the rows in between come first.
+            (should (equal (run -54 4 0)
+                           `((start ,link-row) (vscroll 402))))
+            ;; Past the whole preview, the rest is an ordinary scroll.
+            (should (equal (run -500 2 0)
+                           `((start ,link-row) (vscroll 0) (up 98))))
+            ;; A scroll that stops below the preview is left to Emacs.
+            (should (equal (run -18 3 0) '((up 18))))))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--alignment-keeps-preview-link-row ()
+  "A link row hiding part of its preview should keep its vscroll."
+  (test-ai-code-ghostel-image-preview--with-preview-rows
+    (let (reset)
+      (cl-letf (((symbol-function
+                  'ai-code-ghostel-image-preview--set-window-vscroll)
+                 (lambda (_window value) (push value reset))))
+        (cl-flet ((align (at-row with-vscroll)
+                    (setq start (funcall row at-row)
+                          vscroll with-vscroll
+                          reset nil)
+                    (ai-code-ghostel-image-preview--align-window-start
+                     window (funcall row 3) nil)
+                    reset))
+          ;; On the link row, with the image partly hidden.
+          (should-not (align 1 384))
+          ;; The link row itself is shown whole, like any text row.
+          (should (equal (align 1 6) '(0)))
+          (should (equal (align 0 100) '(0))))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--wheel-enters-preview-from-below ()
+  "An upward wheel event below a preview should not reach the scroll engines."
+  (let (above pixels engine)
+    (cl-letf (((symbol-function 'ai-code-ghostel-image-preview--event-window)
+               (lambda (_event) (selected-window)))
+              ((symbol-function
+                'ai-code-ghostel-image-preview--note-user-scroll)
+               #'ignore)
+              ((symbol-function
+                'ai-code-ghostel-image-preview--window-has-preview-p)
+               (lambda (_window) t))
+              ((symbol-function 'ai-code-ghostel-image-preview--preview-above)
+               (lambda (_window reach) (and above (cons 'overlay reach))))
+              ((symbol-function 'ai-code-ghostel-image-preview--scroll-pixels)
+               (lambda (delta) (push delta pixels)))
+              ((symbol-function 'ultra-scroll)
+               (lambda (&rest _args) (push 'ultra engine)))
+              ((symbol-function 'pixel-scroll-precision)
+               (lambda (&rest _args) (push 'precision engine)))
+              ((symbol-function
+                'ai-code-ghostel-image-preview-schedule-visible-linkify)
+               #'ignore))
+      (let ((ai-code-ghostel-image-preview-prefer-ultra-scroll t)
+            (up '(wheel-up nil 1 1 (0 . 20.4)))
+            (down '(wheel-down nil 1 1 (0 . -20.4))))
+        (setq above t)
+        (ai-code-ghostel-image-preview-scroll up)
+        (should (equal pixels '(-20)))
+        (should-not engine)
+        ;; Scrolling down, or with no preview within reach, is unchanged.
+        (ai-code-ghostel-image-preview-scroll down)
+        (setq above nil)
+        (ai-code-ghostel-image-preview-scroll up)
+        (should (equal pixels '(-20)))
+        (should (equal engine '(ultra ultra)))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--wheel-enters-preview-reads-emacs-mac-delta ()
+  "An emacs-mac trackpad event should enter a preview from below too."
+  (let ((window (selected-window))
+        pixels)
+    (cl-letf (((symbol-function 'ai-code-ghostel-image-preview--preview-above)
+               (lambda (_window reach) (cons 'overlay reach)))
+              ((symbol-function 'ai-code-ghostel-image-preview--scroll-pixels)
+               (lambda (delta) (push delta pixels))))
+      (should (ai-code-ghostel-image-preview--scroll-up-onto-preview
+               '(wheel-up nil 1 (:scrolling-delta-y 20.4 :phase changed))
+               window))
+      (should (equal pixels '(-20)))
+      ;; Scrolling down is left to the scroll engines.
+      (should-not (ai-code-ghostel-image-preview--scroll-up-onto-preview
+                   '(wheel-down nil 1 (:scrolling-delta-y -20.4))
+                   window))
+      ;; A wheeled mouse reports lines, not pixels.
+      (should-not (ai-code-ghostel-image-preview--scroll-up-onto-preview
+                   '(wheel-up nil 1 (:delta-y 1.0))
+                   window))
+      (should-not (ai-code-ghostel-image-preview--scroll-up-onto-preview
+                   'wheel-event window))
+      (should (equal pixels '(-20))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--line-scroll-reaches-preview-above ()
+  "Line scrolling up should use pixels for a preview it is about to reveal."
+  (let (above pixels)
+    (cl-letf (((symbol-function
+                'ai-code-ghostel-image-preview--window-has-preview-p)
+               (lambda (_window) nil))
+              ((symbol-function 'ai-code-ghostel-image-preview--preview-above)
+               (lambda (_window reach) (and above (cons 'overlay reach))))
+              ((symbol-function
+                'ai-code-ghostel-image-preview--note-user-scroll)
+               #'ignore)
+              ((symbol-function
+                'ai-code-ghostel-image-preview-schedule-visible-linkify)
+               #'ignore)
+              ((symbol-function 'ai-code-ghostel-image-preview--scroll-pixels)
+               (lambda (delta) (push delta pixels)))
+              ((symbol-function 'default-line-height) (lambda () 18)))
+      (setq above t)
+      (should (ai-code-ghostel-image-preview--scroll-lines -3))
+      (should (equal pixels '(-54)))
+      ;; A preview above the window does not concern a downward scroll.
+      (should-not (ai-code-ghostel-image-preview--scroll-lines 3))
+      (setq above nil)
+      (should-not (ai-code-ghostel-image-preview--scroll-lines -3))
+      (should (equal pixels '(-54))))))
+
+(ert-deftest test-ai-code-ghostel-image-preview--upward-scroll-keeps-point-visible ()
+  "After scrolling up, point should sit on a row the window shows whole."
+  (test-ai-code-ghostel-image-preview--with-preview-rows
+    (let ((last-whole-row (funcall row 3)))
+      (setq start (funcall row 0))
+      (cl-letf (((symbol-function 'pos-visible-in-window-p)
+                 (lambda (&optional position _window _partially)
+                   (<= position last-whole-row)))
+                ((symbol-function 'window-end)
+                 (lambda (&optional _window _update) (point-max))))
+        (set-window-point window (funcall row 4))
+        (ai-code-ghostel-image-preview--keep-point-visible window)
+        (should (= (window-point window) last-whole-row))
+        ;; A visible point stays where it is.
+        (set-window-point window (funcall row 2))
+        (ai-code-ghostel-image-preview--keep-point-visible window)
+        (should (= (window-point window) (funcall row 2)))))))
+
 (ert-deftest test-ai-code-ghostel-image-preview--line-scroll-declares-evil-properties ()
   "Remapped evil scrolls should not replace the last change for `.'."
   (let (declared)
