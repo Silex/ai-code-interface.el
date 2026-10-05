@@ -3,7 +3,7 @@
 
 ** Main branch change
 
-** 1.98
+** 1.981
 - Feat: Browse, edit and select source/Magit annotations for AI suggestions; clarify menu scopes and retain legacy notes and reply chains
 - Fix: Scroll up onto a Ghostel image preview from the rows below it, by Silex
 - Fix: Scroll line by line over Ghostel image previews, by Silex

@@ -1,6 +1,6 @@
 ;;; ai-code-annotate-magit.el --- Persistent annotations on Magit hunks -*- lexical-binding: t; -*-
 
-;; Author: Kang Tu <tninja@gmail.com>
+;; Author: Sreenivas Venkobarao, Kang Tu <tninja@gmail.com>, AI agent
 ;; SPDX-License-Identifier: Apache-2.0
 
 ;;; Commentary:
