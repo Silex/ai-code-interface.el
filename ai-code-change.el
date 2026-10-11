@@ -529,7 +529,10 @@ Returns non-nil if handled and the caller should exit."
   ;; (interactive)
   (when (and (not (region-active-p))
              (or (not (thing-at-point 'line t)) (string-blank-p (thing-at-point 'line t)))
-             comment-start)
+             comment-start
+             ;; Inside an Org section, act on the section instead.
+             (not (and (derived-mode-p 'org-mode)
+                       (ai-code--org-section-candidates))))
     (let ((todo-text (ai-code-read-string "Enter TODO comment: "))
           (comment-prefix (if (derived-mode-p 'emacs-lisp-mode)
                               (let* ((trimmed (string-trim-right comment-start)))

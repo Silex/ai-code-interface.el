@@ -1431,6 +1431,23 @@ is between the function definition and its body."
       (should (string-match-p "Supporting details live here\\."
                               ai-code-change-test--captured-prompt)))))
 
+(ert-deftest ai-code-test-org-section-blank-body-line-acts-on-section ()
+  "Test a blank line inside an Org section acts on it, not on a new TODO."
+  (with-temp-buffer
+    (ai-code-change-test--org-buffer-setup
+     (concat "* TODO Section task\n"            ; 1
+             "first paragraph\n"                ; 2
+             "\n"                               ; 3
+             "second paragraph\n"))             ; 4
+    (forward-line 2)                            ; on the blank body line
+    (ai-code-change-test--with-org-stubs
+      (ai-code-implement-todo nil)
+      (should-not (string-match-p "TODO:" (buffer-string)))
+      (should (string-match-p "TODO Section task"
+                              ai-code-change-test--captured-prompt))
+      (should (string-match-p "second paragraph"
+                              ai-code-change-test--captured-prompt)))))
+
 (ert-deftest ai-code-test-org-section-preamble-has-no-candidates ()
   "Test text before the first Org headline yields no section candidates."
   (with-temp-buffer
