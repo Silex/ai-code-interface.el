@@ -424,6 +424,63 @@ value is the symbol handed to `call-interactively'."
           (should (equal dired-called-with repo-dir)))
       (delete-directory temp-worktree-root t))))
 
+(ert-deftest ai-code-test-git-worktree-open-dir-from-inside-worktree-opens-repo-dired ()
+  "`ai-code-git-worktree-open-dir' opens Dired for main repo when in worktree."
+  (let* ((temp-worktree-root (make-temp-file "wt-root" t))
+         (repo-dir (expand-file-name "main-repo" temp-worktree-root))
+         (ai-code-git-worktree-root temp-worktree-root)
+         (dired-called-with nil))
+    (make-directory repo-dir t)
+    (unwind-protect
+        (cl-letf (((symbol-function 'ai-code--validate-git-repository)
+                   (lambda () "/tmp/fake/worktrees/main-repo/existing-wt"))
+                  ((symbol-function 'ai-code--worktree-main-repo-root)
+                   (lambda (&optional _dir) "/tmp/fake/projects/main-repo"))
+                  ((symbol-function 'dired)
+                   (lambda (dir) (setq dired-called-with dir))))
+          (ai-code-git-worktree-open-dir)
+          (should (equal dired-called-with repo-dir)))
+      (delete-directory temp-worktree-root t))))
+
+(ert-deftest ai-code-test-git-worktree-branch-from-inside-worktree-uses-main-repo ()
+  "When called inside a worktree, create new worktree under main repo directory."
+  (let* ((temp-worktree-root (make-temp-file "ai-code-worktree-root-" t))
+         (ai-code-git-worktree-root temp-worktree-root)
+         (branch "feature/from-wt")
+         (start-point "main")
+         (expected-repo-dir (expand-file-name "main-repo" temp-worktree-root))
+         (expected-worktree-path (expand-file-name branch expected-repo-dir))
+         captured-task-git-root
+         captured-git-args
+         captured-dired-path)
+    (unwind-protect
+        (cl-letf (((symbol-function 'ai-code--validate-git-repository)
+                   (lambda () "/tmp/fake/worktrees/main-repo/existing-wt"))
+                  ((symbol-function 'ai-code--worktree-main-repo-root)
+                   (lambda (&optional _dir) "/tmp/fake/projects/main-repo"))
+                  ((symbol-function 'magit-branch-p)
+                   (lambda (_b) nil))
+                  ((symbol-function 'magit-call-git)
+                   (lambda (&rest args)
+                     (setq captured-git-args args)
+                     0))
+                  ((symbol-function 'dired)
+                   (lambda (path)
+                     (setq captured-dired-path path)))
+                  ((symbol-function 'y-or-n-p)
+                   (lambda (_prompt) t))
+                  ((symbol-function 'ai-code--worktree-create-and-link-task-file)
+                   (lambda (git-root _path _branch)
+                     (setq captured-task-git-root git-root))))
+          (ai-code-git-worktree-branch branch start-point)
+          (should (equal captured-git-args
+                         (list "worktree" "add" "-b" branch
+                               (file-truename expected-worktree-path)
+                               start-point)))
+          (should (equal captured-dired-path expected-worktree-path))
+          (should (equal captured-task-git-root "/tmp/fake/projects/main-repo")))
+      (delete-directory temp-worktree-root t))))
+
 (ert-deftest ai-code-test-git-worktree-open-dir-errors-when-missing ()
   "`ai-code-git-worktree-open-dir' errors when the worktree directory is absent."
   (let ((ai-code-git-worktree-root (expand-file-name "nonexistent-wt" temporary-file-directory)))

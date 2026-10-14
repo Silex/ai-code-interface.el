@@ -58,6 +58,7 @@ Candidate values:
 (declare-function ai-code--insert-prompt "ai-code-prompt-mode" (prompt-text))
 (declare-function ai-code--ensure-files-directory "ai-code-utils" ())
 (declare-function ai-code--git-root "ai-code-utils" (&optional dir))
+(declare-function ai-code--worktree-main-repo-root "ai-code-utils" (&optional dir))
 (declare-function ai-code--generate-task-filename "ai-code-task" (task-name))
 (declare-function ai-code--initialize-task-file-content "ai-code-task" (task-name task-url))
 (declare-function ai-code--set-session-project-root "ai-code-utils" (root))
@@ -853,8 +854,14 @@ buffer from which this command was invoked, instead of visiting the file."
             (find-file (expand-file-name choice base-dir))))))))
 
 (defun ai-code--git-worktree-repo-dir (git-root)
-  "Return centralized worktree directory for repository at GIT-ROOT."
-  (let ((repo-name (file-name-nondirectory (directory-file-name git-root))))
+  "Return centralized worktree directory for repository at GIT-ROOT.
+When GIT-ROOT is inside a worktree, resolve to the centralized worktree
+directory of the main repository."
+  (let* ((main-root (or (ai-code--worktree-main-repo-root git-root) git-root))
+         (raw-name (file-name-nondirectory (directory-file-name main-root)))
+         (repo-name (if (string-suffix-p ".git" raw-name)
+                        (substring raw-name 0 -4)
+                      raw-name)))
     (expand-file-name repo-name ai-code-git-worktree-root)))
 
 (defun ai-code--validate-git-worktree-root ()
@@ -915,7 +922,8 @@ The worktree path for START-POINT is
   (interactive (ai-code--read-worktree-branch-args))
   (ai-code--validate-git-worktree-root)
   (let* ((git-root (ai-code--validate-git-repository))
-         (repo-worktree-dir (ai-code--git-worktree-repo-dir git-root))
+         (main-root (or (ai-code--worktree-main-repo-root git-root) git-root))
+         (repo-worktree-dir (ai-code--git-worktree-repo-dir main-root))
          (path (expand-file-name branch repo-worktree-dir))
          (parent-dir (file-name-directory path)))
     (unless (file-directory-p repo-worktree-dir)
@@ -937,7 +945,7 @@ The worktree path for START-POINT is
            path exit-code)))
       (dired path)
       (when (y-or-n-p "Create a task file for this worktree? ")
-        (ai-code--worktree-create-and-link-task-file git-root path branch)))))
+        (ai-code--worktree-create-and-link-task-file main-root path branch)))))
 
 (defun ai-code--worktree-create-and-link-task-file (git-root worktree-path branch)
   "Create a task file in GIT-ROOT and symlink it into WORKTREE-PATH.
