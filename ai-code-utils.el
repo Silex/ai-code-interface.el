@@ -57,17 +57,28 @@ a Git repository or when `magit-toplevel' signals an error."
         (when root (file-truename root)))
     (error nil)))
 
-(defun ai-code--worktree-main-repo-root ()
-  "Return the main repository root when inside a git worktree, or nil.
-Uses git-common-dir to find the shared .git directory and derives the
-main repo root from it."
+(defun ai-code--worktree-main-repo-root (&optional dir)
+  "Return the main repository root when DIR or current buffer is in a worktree.
+When DIR is nil, default to `default-directory'.  Return nil when not
+inside a git worktree.  Uses git-common-dir to find the shared .git
+directory and derives the main repo root from it."
   (condition-case nil
-      (let* ((git-common-dir (magit-git-string "rev-parse" "--git-common-dir"))
+      (let* ((target-dir (if dir
+                             (if (and (file-exists-p dir)
+                                      (not (file-directory-p dir)))
+                                 (file-name-directory dir)
+                               (file-name-as-directory dir))
+                           default-directory))
+             (default-directory (or target-dir default-directory))
+             (git-common-dir (magit-git-string "rev-parse" "--git-common-dir"))
              (git-dir (magit-git-string "rev-parse" "--git-dir")))
         (when (and git-common-dir git-dir
                    (not (string= (file-truename git-common-dir)
                                  (file-truename git-dir))))
-          (file-truename (expand-file-name ".." git-common-dir))))
+          (let ((truename (file-truename git-common-dir)))
+            (if (string-equal (file-name-nondirectory (directory-file-name truename)) ".git")
+                (file-truename (expand-file-name ".." truename))
+              truename))))
     (error nil)))
 
 (defun ai-code--project-root ()
